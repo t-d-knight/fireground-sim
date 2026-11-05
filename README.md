@@ -10,7 +10,7 @@ npm install
 npm run build        # writes dist/index.html
 open dist/index.html # or serve dist/ with any static server
 ```
-No server is needed for single-player. Hydrants are loaded from `data/hydrants.local.json` when present (not in the repo, see `NOTICE.md`); without it the sim runs with no hydrants.
+No server is needed for single-player. Mains are assumed along built-up roads, so no hydrant data is needed. An optional git-ignored `data/hydrants.local.json` can supply real hydrants (see `NOTICE.md`).
 
 ## Layout
 | Path | What |

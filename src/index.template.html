@@ -182,14 +182,29 @@ MAP.water.forEach(w=>{const c=polyC(w[1]);if(!w[0]&&(polyA(w[1])>=300||(c[0]>-45
 WPTS.forEach((w,i)=>DAMS.push({x:w[0],y:w[1],area:0,wp:i+1,g:!!w[2],known:w[2]?3:0,usable:w[2]?true:null}));
 const MAINS={marong:{draws:0},gully:{draws:0},eagle:{draws:0}};
 const SRC=[];
+const TOWNS=[{k:'m',n:'Marong',c:[5900,-5950],r:1900},{k:'g',n:'Maiden Gully',c:[12500,-7000],r:3000},{k:'e',n:'Eaglehawk',c:[15500,-4300],r:3000}];
+/* Assumed mains: a point every MAINS_STEP m along any road inside a residential area that is within 150 m of a residential street, for each town in TOWNS. Replaces digitised hydrant data. To add a town, add an entry to TOWNS. */
+const MAINS_STEP=60;
+const GEN=(function(){const out={m:[],g:[],e:[]};if(!MAP.res||!MAP.roads)return out;
+ const polys=[];MAP.res.forEach(p=>{if(!p||p.length<3)return;let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1]}polys.push({p,x0,x1,y0,y1})});
+ const inPoly=(x,y)=>{for(const o of polys){if(x<o.x0||x>o.x1||y<o.y0||y>o.y1)continue;let c=false;const p=o.p;for(let i=0,j=p.length-1;i<p.length;j=i++){if((p[i][1]>y)!==(p[j][1]>y)&&x<(p[j][0]-p[i][0])*(y-p[i][1])/(p[j][1]-p[i][1])+p[i][0])c=!c}if(c)return true}return false};
+ const townOf=(x,y)=>{let b=null,bd=1e18;for(const T of TOWNS){const d=Math.hypot(x-T.c[0],y-T.c[1]);if(d<T.r&&d<bd){bd=d;b=T}}return b};
+ const walk=(pts,step,fn)=>{let carry=step;for(let i=1;i<pts.length;i++){const x0=pts[i-1][0],y0=pts[i-1][1],d=Math.hypot(pts[i][0]-x0,pts[i][1]-y0);if(!d)continue;let s=step-carry;while(s<=d){fn(x0+(pts[i][0]-x0)*s/d,y0+(pts[i][1]-y0)*s/d);s+=step}carry=d-(s-step)}};
+ const CS=150,H=new Map();roads:for(const r of MAP.roads){if(r[0]!=='r')continue;const pts=r[2];let ok=false;for(const q of pts){if(townOf(q[0],q[1])){ok=true;break}}if(!ok)continue;walk(pts,40,(x,y)=>{const k=Math.floor(x/CS)+','+Math.floor(y/CS);(H.get(k)||H.set(k,[]).get(k)).push([x,y])})}
+ const near=(x,y)=>{const a=Math.floor(x/CS),b=Math.floor(y/CS);for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const l=H.get((a+i)+','+(b+j));if(l)for(const q of l)if(Math.hypot(q[0]-x,q[1]-y)<=CS)return true}return false};
+ const seen=new Set();for(const r of MAP.roads){if(r[0]==='t')continue;const pts=r[2];let ok=false;for(const q of pts){if(townOf(q[0],q[1])){ok=true;break}}if(!ok)continue;
+  walk(pts,MAINS_STEP,(x,y)=>{const T=townOf(x,y);if(!T)return;const k=Math.round(x/45)+','+Math.round(y/45);if(seen.has(k))return;if(!near(x,y)||!inPoly(x,y))return;seen.add(k);out[T.k].push([Math.round(x),Math.round(y)])})}
+ return out})();
 const FPS=(/*HYD_FPS*/[]).map((q,i)=>({name:'Marong fireplug '+(i+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.marong}));
 const FPC=FPS.length?[FPS.reduce((a,s)=>a+s.x,0)/FPS.length,FPS.reduce((a,s)=>a+s.y,0)/FPS.length]:[5780,-5720];
 const HYD_M=/*HYD_M*/[];
-HYD_M.forEach((q,i)=>FPS.push({name:'Marong fireplug '+(FPS.length+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.marong}));
+if(!HYD_M.length)HYD_M.push(...GEN.m);
+HYD_M.forEach((q,i)=>FPS.push({name:'Marong main point '+(FPS.length+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.marong}));
 const HYD_G=/*HYD_G*/[],HYD_E=/*HYD_E*/[];
+if(!HYD_G.length)HYD_G.push(...GEN.g);if(!HYD_E.length)HYD_E.push(...GEN.e);
 const cen=(a,d)=>a.length?[a.reduce((t,q)=>t+q[0],0)/a.length,a.reduce((t,q)=>t+q[1],0)/a.length]:d,FPCG=cen(HYD_G,[13200,-6300]),FPCE=cen(HYD_E,[17000,-5000]);
-HYD_G.forEach((q,i)=>FPS.push({name:'Maiden Gully hydrant '+(i+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.gully}));
-HYD_E.forEach((q,i)=>FPS.push({name:'Eaglehawk hydrant '+(i+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.eagle}));
+HYD_G.forEach((q,i)=>FPS.push({name:'Maiden Gully main point '+(i+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.gully}));
+HYD_E.forEach((q,i)=>FPS.push({name:'Eaglehawk main point '+(i+1),kind:'hyd',x:q[0],y:q[1],setup:120,fill:240,main:MAINS.eagle}));
 const HGROUPS=[{n:'Marong fireplugs',c:FPC,m:MAINS.marong,k:'fp'},{n:'Maiden Gully hydrants',c:FPCG,m:MAINS.gully,k:'fpg'},{n:'Eaglehawk hydrants',c:FPCE,m:MAINS.eagle,k:'fpe'}];
 
 /* ---------- state ---------- */
@@ -974,7 +989,7 @@ const ASSUME=[
 ['Fingers and spotting odds scale with (wind/40)^2 x (5/MC)^0.5','A','Model'],
 ['Crews on reserve pick the quickest known source (hydrants, usable known dams, set-up water points) not within 500 m of the fire, fill, then return to task','A','Model'],
 ['Marong CFA station placed at 55 High St where TK marked it on the map; its fireplug is on the footpath out the front. Maiden Gully station is still an approximate township position; place it in the Facilitator tab','S','TK screenshots'],
-['Marong fireplugs: 59 points read from three Coliban Water screenshots (west side of town, Oscar Dr to Landry Lane, plus the station block), geo-referenced to OSM roads, about 10 m. East and south of town not mapped. One shared main: pressure drops after 6 fills, fails after 10','S','TK screenshots'],
+['Mains points are assumed, not surveyed: a point every 60 m along every road inside a residential area that is within 150 m of a residential street, for Marong, Maiden Gully and Eaglehawk (about 250, 500 and 900 points). Anywhere along a built-up road is therefore within 30 m of a point, so the 30 m direct-draw rule applies along those roads. Rural and industrial roads have none. Each town is its own main. To add a town, add it to TOWNS in the source','A','TK: theoretical mains within about 50 m of a road in a built-up area; 60 m, 150 m and the town radii are assumed'],
 ['Head ROS 10.6 / 8.9 / 15.2 km/h (crop / grazed-stubble / gust crop)','S','AFDRS Grassland Model Guide v2024.6.0 (Cheney et al. 1998)'],
 ['Ellipse length-to-breadth 10.1, back fire 5% of head','S','Cruz et al. 2015 at 40 km/h wind; AFDRS guide'],
 ['Fuel dice per km: 1-3 crop, 4-6 stubble','A','Exercise rule (TK)'],
@@ -1040,7 +1055,7 @@ const ASSUME=[
 ['Staging area: Marong CFA station by default, or a point you place on the map (snapped to the nearest main road). Moving it delays rehab and ambulance by about 10 min','A','TK: alternative RV south or east; Maiden Gully safest, downhill, several exits. RV renamed staging area, placed by click instead of a list'],
 ['Bail out: selected crews, or all if none selected, disengage and drive to the staging area; tasks and defend slots are cleared','A','TK: a call for when things are going sideways'],
 ['At the wind change each active spot or finger keeps its burnt shape and a new lobe starts at its tip, heading in the new wind direction (no spinning)','A','TK: lobes should spread like the main fire, not rotate'],
-['Hydrants: Maiden Gully (267) and Eaglehawk (345) from the VICMAP township maps (Coliban Water hydrants and standpipes), digitised from the images and placed by the page grid and the fire station symbol. Positions are within about 30 to 40 m (checked against the Marong plugs). Each town is its own main with the same capacity rules as Marong (2 trucks plus 2 per booster, collapse above double). Marong keeps its 59 supplied plugs plus 60 more from the map that are over 45 m from a supplied plug','A','VICMAP North West Book (2024), Marong, Maiden Gully, Bendigo 01; positions digitised'],
+['Real hydrant positions are not used. A git-ignored data/hydrants.local.json can still supply real ones (see NOTICE.md); if it is present it replaces the assumed points','A','Licensing of the source maps is unclear, so the real positions stay out of the public repo'],
 ['Water point discovery: only the 5 reliable water points start known. The Firebird (AAS) assesses one dam or water point behind the fire every 2 to 3 min and nominates it, which marks it known and usable (from the air it can see water)','A','TK: everything starts unknown except the reliable sources; chopper can rule sources in or out at about 1 every 2 to 3 min'],
 ['Aircraft dispatch only by State Air Desk request or PDD (000 Code 1 grass and scrub); a State Air Desk request is assumed to take 8 to 14 min to airborne, PDD 4 to 7 min','S','State PDD briefing (dispatch paths); delay times assumed'],
 ['Bendigo Airport at about 23 km from the fire origin: position from public coordinates','A','Projected from airport latitude and longitude'],
