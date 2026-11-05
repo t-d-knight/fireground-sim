@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.67
+- Version badge (version, commit, UTC build time) in orange at the top left of the map.
+- Cloudflare deploy config (`wrangler.jsonc`) and `docs/DEPLOY-cloudflare.md` for the solo site.
+- Single head definition for crews and aircraft with 300 m hysteresis (regression under investigation, see `robots_fighting.md`).
+
+## 0.66b
 - Head is now the furthest uncontrolled point forward along the wind direction, before and after the wind change. Controlling it moves the head back. Spots can only start from uncontrolled sections.
 - Hydrant data replaced by assumed mains along built-up roads (60 m spacing, `TOWNS` config). Real hydrants are optional and git-ignored.
 

@@ -1,0 +1,8 @@
+{
+  // Solo exercise: static site served from dist/ (built by tools/build.py).
+  // The multiplayer relay is separate (worker/wrangler.toml).
+  "name": "solo-hw",
+  "compatibility_date": "2025-01-01",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "solo-hw.marongcfa.org.au", "custom_domain": true }]
+}
