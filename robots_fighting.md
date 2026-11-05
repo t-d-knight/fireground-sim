@@ -15,7 +15,7 @@ Coordination file for everyone (people and AI agents) changing this repo. If you
 
 | Area (function names to grep) | Claimed by | Since | Notes |
 |---|---|---|---|
-| Head and spots (`uncontrolled`, `realHead`, `spawnSpot`, `leadLobe`) | Claude session 01QvxJp… for TK | 2026-11-05 | Head redefinition, see log |
+| Head and spots (`uncontrolled`, `realHead`, `headGoal`, `spawnSpot`, `leadLobe`, `airTarget`) | Claude session 01QvxJp… for TK | 2026-11-05 | Regression under investigation, see log |
 | Mains (`TOWNS`, `GEN`, `MAINS_STEP`) | Claude session 01QvxJp… for TK | 2026-11-05 | |
 | Multiplayer relay (`worker/`) | unclaimed | | Scaffold only |
 | Crew AI and the bot (`tests/bot.js`, `autoStep`, `crewStep`) | unclaimed | | |
@@ -26,6 +26,22 @@ Add yourself, a date, and what you are touching. Remove your row when you are do
 - Remote `main` and local were identical at `51ce6cf` when I fetched. No other branches. No other contributors had pushed yet.
 
 ## Log (newest first, add yours at the top)
+### 2026-11-05 (later), Claude session for TK: tester feedback triage
+No other pushes had landed on `main` or any other branch when I fetched (remote `ee7b670`, identical to local). The feedback below came from testers in chat, not from commits. Status column is honest: "local" means a change exists in one working tree only and is **not pushed**.
+
+| # | Feedback | Status |
+|---|---|---|
+| 1 | Cannot switch a crew from head attack to defensive, and defence lines are not accepted. The order matters: click Defend, draw points, then pick crews, then Deploy. | Open. Idea: let Deploy use whatever is selected at the time, and add drag-and-drop placement for strike teams (inadvertent clicks also wreck positions). |
+| 2 | Strike teams bunch on the highway and stop; others pass them. Untasked crews default to head attack and then "faff around". | Cause found: the head was defined in three places. `realHead` (new rule) was used for arrival checks, but `headGoal` (crew destination) and the aircraft target still used the old `leadLobe`/`headPoint`. Crews drove to the old head, never got within 250 m of the new one, and rerouted forever. Local fix: one definition via `uncontrolled()`, plus 300 m hysteresis so the head does not flip. |
+| 3 | Aircraft work south-west while the head is north-east after the wind change. | Same cause (`airTarget` 'head', `airRear`, `airWater` used `headPoint`). Local fix as above. |
+| 4 | 20+ appliances left the fire and sit at a farmer's dam, nowhere near the fire. | Not reproduced. Suspect: auto-refill now picks the single quickest source (v61, hydrants and dams equal), with no load spreading, so everyone chooses the same dam. Idea: add a time penalty per truck already heading to a source. |
+| 5 | A finger has no spread for about 4 min while the rest of the fire pushes the same way. | Not reproduced. |
+| 6 | Fire shape after the wind change is a narrow spike that just sits there. | Open. |
+| 7 | Ambulance at the staging area, then a heat-stress crew goes there 3 min later. | Probably as designed. Confirm. |
+| 8 | The head does not pivot as much as TK wants after the change. | Open, linked to 2. |
+| 9 | Scenario basis: worst recorded Marong-area weather in November at peak harvest, about the 95th percentile. A tester asked about 100 km/h winds around harvest. | Open. The weather basis should be written into the Assumptions tab with sources. |
+
+**Bot check on the local head fix (not pushed):** still bad. Seed 1234 at 6000 s: 1505 ha, 0 crews attacking (25 moving). Seed 7: 1095 ha, 0 attacking. Old head rule, same seeds: 917 and 796 ha with 3 to 7 attacking. So the local fix removes an inconsistency but does not restore engagement. I do not yet know why crews never settle into attack; a far spot (up to 10 km ahead in woodland) becoming "the head" and pulling every crew is the leading suspect. **Do not assume the head redefinition pushed in `ee7b670` is good.** If you have a better approach, claim the Head row above and say so here.
 ### 2026-11-05, Claude session for TK: head and spot rules
 - **Changed:** head is now the furthest uncontrolled point forward along the wind direction (`AXIS` before the change, `LEFT` after). Controlling the front moves it back. Spots can only start from uncontrolled sections: unheld edge bins, the main head tip unless checked or contained, and spots or fingers over 300 m long. Weights: head tip 25, edge point 1, falling to nothing 1 km behind the front.
 - **Side effect:** `spawnSpot` draws random numbers in a different order, so every seed now produces a different fire than before this commit. Old and new runs are not comparable seed for seed.
