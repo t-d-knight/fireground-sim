@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Head is now the furthest uncontrolled point forward along the wind direction, before and after the wind change. Controlling it moves the head back. Spots can only start from uncontrolled sections.
+- Hydrant data replaced by assumed mains along built-up roads (60 m spacing, `TOWNS` config). Real hydrants are optional and git-ignored.
+
 ## 0.66
 - Township status (clear, threatened, impacted) and a facilitator scorecard with a Copy scorecard button.
 - First unit on scene cue; aircraft and Make Tankers call times tracked.

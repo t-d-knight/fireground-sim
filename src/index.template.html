@@ -393,11 +393,12 @@ function burntAt(x,y){const ua=x*AXIS[0]+y*AXIS[1],va=x*LEFT[0]+y*LEFT[1],i=Math
 function defFac(x,y,r){const n=defCount(x,y,r);return n?Math.max(.4,1-.12*n):1}
 function lobeBurntAt(x,y,ex){for(const l of F.lobes.concat(F.dead||[])){if(l===ex||l.s<30)continue;const rx=x-l.ox,ry=y-l.oy,al=rx*l.dx+ry*l.dy;if(al<-10||al>l.s*.97)continue;const ls=-rx*l.dy+ry*l.dx;if(Math.abs(ls)<lobeW(l,Math.max(0,Math.min(l.s,al)),ls>=0?1:-1)-5)return true}return false}
 function spawnSpot(force,at){
-  let ox,oy,d=0;
+  let ox,oy,d=0;const W=F.wc?LEFT:AXIS,Pp=F.wc?AXIS:LEFT;
+  if(!at){const U=uncontrolled();if(!U.list.some(q=>q.src!==false))return}
   for(let tr=0;tr<12;tr++){d=100+rand()*(F.gust?1400:600);if(F.wood){d=300+rand()*(F.gust?4000:2500);if(rand()<.15)d=4000+rand()*6000}
     if(at){ox=at[0];oy=at[1];d=0;break}
-    else if(!F.wc){const lat=(rand()-.5)*.5*d;ox=AXIS[0]*(F.s+d)+LEFT[0]*lat;oy=AXIS[1]*(F.s+d)+LEFT[1]*lat}
-    else{const u0=rand()*F.wcS,i=Math.floor(u0/DS)+OFF;ox=AXIS[0]*u0+LEFT[0]*(F.hwL[i]+d);oy=AXIS[1]*u0+LEFT[1]*(F.hwL[i]+d)}
+    else{const U=uncontrolled(),mx=U.list.reduce((a,q)=>Math.max(a,q.sc),-1e18);let tot=0;const ws=U.list.map(q=>{const w=(q.src===false?0:q.w)*Math.max(.02,Math.min(1,1-(mx-q.sc)/1000));tot+=w;return w});let r=rand()*tot,k=0;while(k<ws.length-1&&r>ws[k]){r-=ws[k];k++}
+      const s=U.list[k],lat=(rand()-.5)*.5*d;ox=s.x+W[0]*d+Pp[0]*lat;oy=s.y+W[1]*d+Pp[1]*lat}
     if(!burntAt(ox,oy))break;if(tr===11)return}
   const dir0=F.wc?LEFT:AXIS,jit=dirOff(S.t),dir=rot(dir0[0],dir0[1],jit);
   const lb={kind:'s',jit,ox,oy,dx:dir[0],dy:dir[1],s:12,lb:5,ros:lobeRos(ox,oy)*.75,held:false,work:0,reported:false,reportAt:S.t+(force||at?20:30+Math.floor(rand()*90))};
@@ -667,7 +668,18 @@ function issue(u,mode,wx,wy,extra){
   u.path=r.path;u.pi=0;u.warn=0;u.state='moving';u.reach=0;if(isT)u.tac=mode;u.contact=false;u.tgt={kind:isT?'attack':(mode==='go'?'go':mode),src:extra&&extra.src,px:wx,py:wy};
   logE(`${u.name} ordered to ${mode==='go'?'move':isT?mode+(mode==='defend'||mode==='patrol'?'':' attack'):mode==='boost'?'boost the main':'draw water'}.`,'');dirty=1;renderUnits()}
 function leadLobe(){if(F.wc)return null;let b=null,bu=F.s+150;for(const l of F.lobes){if(l.held||l.s<120)continue;const u=(l.ox+l.dx*l.s)*AXIS[0]+(l.oy+l.dy*l.s)*AXIS[1];if(u>bu){bu=u;b=l}}return b}
-function realHead(){const l=leadLobe();if(l)return[l.ox+l.dx*l.s,l.oy+l.dy*l.s];return headPoint()}
+/* Head = the furthest point forward along the wind direction (AXIS before the change, LEFT after) of the part of the perimeter that is not controlled. Control the furthest point and the head moves back to the next furthest uncontrolled point. Uncontrolled = unheld edge bins, unheld lobes (spots and fingers), and the main head tip unless it is checked or the fire is contained. Spots can only start from these. */
+let UC=null;
+function uncontrolled(){if(UC&&UC.t===S.t&&UC.F===F)return UC;
+  const W=F.wc?LEFT:AXIS,top=F.wc?F.wcS:F.s,c=[],headHeld=F.contained||(!F.wc&&S.t<F.checkedUntil);
+  if(!F.wc&&!headHeld&&F.s>1)c.push({x:AXIS[0]*F.s,y:AXIS[1]*F.s,w:25,sc:F.s});
+  if(F.s>1)for(let i=0;i<NS;i++){const u=uOf(i);if(u<0)continue;if(u>top)break;
+    if(!F.hL[i]){const q=edgePt(i,1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1]})}
+    if(!F.hR[i]){const q=edgePt(i,-1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1]})}}
+  for(const l of F.lobes){if(l.held)continue;const x=l.ox+l.dx*l.s,y=l.oy+l.dy*l.s,pr=x*W[0]+y*W[1];c.push({x,y,w:1.5,sc:pr-150,lobe:l,big:l.s>=120,src:l.s>=300})}
+  let best=null,mx=-1e18;for(const q of c){if(q.lobe&&!q.big)continue;if(q.sc>mx){mx=q.sc;best=q}}
+  UC={t:S.t,F,list:c,best,mx};return UC}
+function realHead(){const U=uncontrolled();if(U.best)return[U.best.x,U.best.y];return headPoint()}
 function headPoint(){if(!F.wc)return[AXIS[0]*F.s,AXIS[1]*F.s];const u=F.wcS*.5,i=Math.floor(u/DS)+OFF;return[AXIS[0]*u+LEFT[0]*F.hwL[i],AXIS[1]*u+LEFT[1]*F.hwL[i]]}
 function pickTarget(mode,x,y){if(mode==='indirect'||mode==='defend'||mode==='patrol')return{type:'point'};
   const hp=realHead();if(Math.hypot(x-hp[0],y-hp[1])<600)return{type:'head'};
@@ -989,6 +1001,7 @@ const ASSUME=[
 ['Fingers and spotting odds scale with (wind/40)^2 x (5/MC)^0.5','A','Model'],
 ['Crews on reserve pick the quickest known source (hydrants, usable known dams, set-up water points) not within 500 m of the fire, fill, then return to task','A','Model'],
 ['Marong CFA station placed at 55 High St where TK marked it on the map; its fireplug is on the footpath out the front. Maiden Gully station is still an approximate township position; place it in the Facilitator tab','S','TK screenshots'],
+['Head: the furthest point forward along the wind direction of the part of the perimeter that is not controlled (unheld edge, unheld spots and fingers, and the main head tip unless it is checked). When the furthest point is controlled the head moves back to the next one. Spots can only start from uncontrolled sections (edge, main head tip, and spots or fingers once they are over 300 m long), weighted strongly towards the front (the main head tip counts about 25 times an edge point, falling to nothing 1 km back). A fully controlled fire throws no spots','A','TK: head = furthest forward from the wind; spots only from uncontrolled sections; the front weighting is assumed'],
 ['Mains points are assumed, not surveyed: a point every 60 m along every road inside a residential area that is within 150 m of a residential street, for Marong, Maiden Gully and Eaglehawk (about 250, 500 and 900 points). Anywhere along a built-up road is therefore within 30 m of a point, so the 30 m direct-draw rule applies along those roads. Rural and industrial roads have none. Each town is its own main. To add a town, add it to TOWNS in the source','A','TK: theoretical mains within about 50 m of a road in a built-up area; 60 m, 150 m and the town radii are assumed'],
 ['Head ROS 10.6 / 8.9 / 15.2 km/h (crop / grazed-stubble / gust crop)','S','AFDRS Grassland Model Guide v2024.6.0 (Cheney et al. 1998)'],
 ['Ellipse length-to-breadth 10.1, back fire 5% of head','S','Cruz et al. 2015 at 40 km/h wind; AFDRS guide'],
