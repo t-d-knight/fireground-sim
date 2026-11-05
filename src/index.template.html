@@ -568,7 +568,9 @@ function offRoute(u,goal){const d=Math.hypot(goal[0]-u.x,goal[1]-u.y),fz=F&&!F.w
   const e=r1.path[r1.path.length-1],de=Math.hypot(goal[0]-e[0],goal[1]-e[1]),r2=de>100&&de<=2500?nav(e[0],e[1]):null;
   const path=r1.path.slice(),psp=r1.path.slice(1).map(()=>NaN);if(r2){for(let k=1;k<r2.path.length;k++){path.push(r2.path[k]);psp.push(r2.psp[k-1])}}
   return{path,psp,secs:r1.secs+(r2?r2.secs:0)}}
-function headGoal(u){const k=u.id%5;{const L=leadLobe();if(L)return lobeGoal(L,u)}if(F.wc){const hp=headPoint();return[hp[0]+LEFT[0]*25-AXIS[0]*k*40,hp[1]+LEFT[1]*25-AXIS[1]*k*40]}
+function headGoal(u){const k=u.id%5,U=uncontrolled(),b=U.best;
+  if(b&&b.lobe)return lobeGoal(b.lobe,u);
+  if(b&&b.side){const i=Math.max(0,b.i-k*2),q=edgePt(i,b.side),n=b.side>0?LEFT:[-LEFT[0],-LEFT[1]];return[q[0]+n[0]*25,q[1]+n[1]*25]}
   const side=(u.id%2)?1:-1,us=F.s-150-k*30,i=Math.max(0,Math.floor(us/DS)+OFF),q=edgePt(i,side),n=side>0?LEFT:[-LEFT[0],-LEFT[1]];return[q[0]+n[0]*25,q[1]+n[1]*25]}
 function reroute2(u,gx,gy,rough){if((NV.budget=(NV.budget===undefined?4:NV.budget))<=0)return false;NV.budget--;const o=offRoute(u,[gx,gy]);if(!o)return reroute(u,nearestNodeC(gx,gy,nearestNode(u.x,u.y)),rough);u.path=o.path;u.psp=o.psp;u.pspFor=o.path;u.pi=0;u.state='moving';u.tgt={kind:'attack'};u.reach=0;u.lastAuto=S.t;return true}
 function moveUnits(){
@@ -669,15 +671,18 @@ function issue(u,mode,wx,wy,extra){
   logE(`${u.name} ordered to ${mode==='go'?'move':isT?mode+(mode==='defend'||mode==='patrol'?'':' attack'):mode==='boost'?'boost the main':'draw water'}.`,'');dirty=1;renderUnits()}
 function leadLobe(){if(F.wc)return null;let b=null,bu=F.s+150;for(const l of F.lobes){if(l.held||l.s<120)continue;const u=(l.ox+l.dx*l.s)*AXIS[0]+(l.oy+l.dy*l.s)*AXIS[1];if(u>bu){bu=u;b=l}}return b}
 /* Head = the furthest point forward along the wind direction (AXIS before the change, LEFT after) of the part of the perimeter that is not controlled. Control the furthest point and the head moves back to the next furthest uncontrolled point. Uncontrolled = unheld edge bins, unheld lobes (spots and fingers), and the main head tip unless it is checked or the fire is contained. Spots can only start from these. */
-let UC=null;
+let UC=null,UH=null;
 function uncontrolled(){if(UC&&UC.t===S.t&&UC.F===F)return UC;
   const W=F.wc?LEFT:AXIS,top=F.wc?F.wcS:F.s,c=[],headHeld=F.contained||(!F.wc&&S.t<F.checkedUntil);
-  if(!F.wc&&!headHeld&&F.s>1)c.push({x:AXIS[0]*F.s,y:AXIS[1]*F.s,w:25,sc:F.s});
+  if(!F.wc&&!headHeld&&F.s>1)c.push({x:AXIS[0]*F.s,y:AXIS[1]*F.s,w:25,sc:F.s,key:'tip',tip:true});
   if(F.s>1)for(let i=0;i<NS;i++){const u=uOf(i);if(u<0)continue;if(u>top)break;
-    if(!F.hL[i]){const q=edgePt(i,1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1]})}
-    if(!F.hR[i]){const q=edgePt(i,-1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1]})}}
-  for(const l of F.lobes){if(l.held)continue;const x=l.ox+l.dx*l.s,y=l.oy+l.dy*l.s,pr=x*W[0]+y*W[1];c.push({x,y,w:1.5,sc:pr-150,lobe:l,big:l.s>=120,src:l.s>=300})}
+    if(!F.hL[i]){const q=edgePt(i,1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1],key:'e'+i+'L',i,side:1})}
+    if(!F.hR[i]){const q=edgePt(i,-1);c.push({x:q[0],y:q[1],w:1,sc:q[0]*W[0]+q[1]*W[1],key:'e'+i+'R',i,side:-1})}}
+  for(const l of F.lobes){if(l.held)continue;const x=l.ox+l.dx*l.s,y=l.oy+l.dy*l.s,pr=x*W[0]+y*W[1];c.push({x,y,w:1.5,sc:pr-150,lobe:l,key:l,big:l.s>=120,src:l.s>=300})}
   let best=null,mx=-1e18;for(const q of c){if(q.lobe&&!q.big)continue;if(q.sc>mx){mx=q.sc;best=q}}
+  /* hysteresis: keep the current head unless a new candidate is more than 300 m further forward, or the old one is controlled, so crews are not sent back and forth */
+  if(UH&&UH.F===F&&best){const old=c.find(q=>q.key===UH.key&&(!q.lobe||q.big));if(old&&old.sc>=mx-300)best=old}
+  UH=best?{F,key:best.key}:null;
   UC={t:S.t,F,list:c,best,mx};return UC}
 function realHead(){const U=uncontrolled();if(U.best)return[U.best.x,U.best.y];return headPoint()}
 function headPoint(){if(!F.wc)return[AXIS[0]*F.s,AXIS[1]*F.s];const u=F.wcS*.5,i=Math.floor(u/DS)+OFF;return[AXIS[0]*u+LEFT[0]*F.hwL[i],AXIS[1]*u+LEFT[1]*F.hwL[i]]}
@@ -1131,10 +1136,10 @@ if(kind==='town'){let best=null,bd=1e18;const M=MARONG,cand=(k,x,y,ex)=>{const d
   const top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0)continue;if(u>top)break;for(const sd of [1,-1]){const h=sd>0?F.hwL[i]:F.hwR[i];if(h>0&&!(sd>0?F.hL[i]:F.hR[i])&&i%4===0){const q=edgePt(i,sd);cand('flank',q[0],q[1],{i,side:sd})}}}
   if(best)return best;kind='head'}
  if(kind==='flank'){const u=F.wc?F.wcS*.65:F.s*.7,i=Math.floor(u/DS)+OFF;if(i>=0&&i<NS&&F.hwL[i]>0){const p=edgePt(i,1);return{k:'flank',x:p[0],y:p[1],i}}kind='head'}
- const h=headPoint();return{k:'head',x:h[0],y:h[1]}}
-function airRear(d){const hp=headPoint(),dir=F.wc?LEFT:AXIS;return (d.x-hp[0])*dir[0]+(d.y-hp[1])*dir[1]<=-300}
+ const h=realHead();return{k:'head',x:h[0],y:h[1]}}
+function airRear(d){const hp=realHead(),dir=F.wc?LEFT:AXIS;return (d.x-hp[0])*dir[0]+(d.y-hp[1])*dir[1]<=-300}
 function airOk(d){return d.usable!==false&&(d.air==='ok'||(d.wp&&d.g))}
-function airWater(){let best=null,bd=1e18;const hp=headPoint();for(const d of DAMS){if(!airOk(d)||!airRear(d))continue;const dd=Math.hypot(d.x-hp[0],d.y-hp[1]);if(dd<bd){bd=dd;best=d}}return{d:bd<1e17?bd:6000,w:best}}
+function airWater(){let best=null,bd=1e18;const hp=realHead();for(const d of DAMS){if(!airOk(d)||!airRear(d))continue;const dd=Math.hypot(d.x-hp[0],d.y-hp[1]);if(dd<bd){bd=dd;best=d}}return{d:bd<1e17?bd:6000,w:best}}
 function airClaim(w){const ht=S.air.ht;if(ht.wsrc===w)return;if(ht.wsrc)ht.wsrc.heliUntil=0;ht.wsrc=w;if(!w)return;w.heliUntil=1e12;
  const nm=w.wp?'Water point '+w.wp:'the dam';logE(`<b>Helitak 335 takes ${nm}</b> as its water source. Tankers there must move off and use another source.`,'warn');
  for(const u of units){if(u.type==='SUP')continue;if(Math.hypot(u.x-w.x,u.y-w.y)<150&&(u.state==='filling'||u.state==='idle'||u.state==='fill')){logE(`${u.name} clears out for the helicopter.`,'warn');u.state='idle';u.path=null;seekWater(u)}}}
