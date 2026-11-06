@@ -67,3 +67,6 @@ No other pushes had landed on `main` or any other branch when I fetched (remote 
 - **Verified:** `tests/head.js` passes (head moves back about 840 m when the front 800 m is held and the head is checked). Smoke test passes.
 - **Not resolved:** bot area burnt at 6000 s went up on three of four seeds (1234: 917 to 1527 ha; 7: 796 to 1249; 21: 947 to 1200; 99: 988 to 951). Head-chasing crews moved more and attacked less (about 20 to 29 moving, 0 to 7 attacking). It may be the changed random streams, or the head target now jumping between lobes. I have not separated the two. If you can, compare many seeds before and after, not one.
 - **Also changed in the previous push:** hydrant data removed from the repo and replaced by assumed mains.
+
+## Log: ROADMAP.md added
+- Fetched origin/main (3b23c62) before pushing; no upstream changes since PR #1. Added `ROADMAP.md` (docs only, no code touched). Please keep it updated rather than starting a parallel plan file.
