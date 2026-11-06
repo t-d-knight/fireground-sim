@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'dist', 'index.html'), 'utf8');
 assert.ok(html.includes('window.__sim={'), 'simulation test API is missing');
 const testHtml = html.replace('window.__sim={',
-  'window.__test={MAP,buildNav,crewStep,windChange,mkUnit,MAINS,edgePt,COORD,chooseWork,taskAuto,autoStep,lobeGoal,targetGoal,FPS,TACTICS,linePlan,lineTask,linePoint,lineWork,lineState,decayLines,tacticalPressure,headAttackSuitable,rotateForWater,tacticalFallback,stepFire};window.__sim={');
+  'window.__test={MAP,buildNav,crewStep,windChange,mkUnit,MAINS,edgePt,COORD,chooseWork,taskAuto,autoStep,lobeGoal,targetGoal,FPS,TACTICS,linePlan,lineTask,linePoint,lineWork,lineState,decayLines,tacticalPressure,headAttackSuitable,rotateForWater,tacticalFallback,stepFire,fireRouteRisk,fireSegmentClear,firePathClear,moveUnits,attackEdge,playerHeadPoint,playerHeadGoal,playerHeadPincer,unitAt};window.__sim={');
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
@@ -31,6 +31,151 @@ const testHtml = html.replace('window.__sim={',
     }
   }
   try {
+    await check('a player head click keeps its assignment during a local gust hold', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);w.F.gust=true;
+      const u=r.mkUnit({type:'TK',name:'player crew',x:4400,y:-3800});w.units.push(u);w.S.sel.add(u.id);w.setMode('direct');
+      const head=[Math.SQRT1_2*w.F.s,-Math.SQRT1_2*w.F.s];w.onMapClick(...head);
+      const edge=r.attackEdge(u),first={type:u.target.type,player:u.target.playerHead,hold:u.headHold,path:u.path,anchor:u.anchor,highlightDistance:Math.hypot(edge.anchor[0]-head[0],edge.anchor[1]-head[1])};
+      w.S.t=100-u.id;w.NV.budget=4;r.autoStep();
+      const stayed=u.target.type==='head'&&u.headHold;
+      w.setMode('go');w.onMapClick(5000,-6500);
+      return{first,stayed,cancelled:!u.headHold&&!(u.target&&u.target.playerHead)};
+    }, result => {assert.equal(result.first.type,'head');assert.equal(result.first.player,true);assert.equal(result.first.hold,true);assert.equal(result.first.path,null);assert.equal(result.first.anchor,null);assert.ok(result.first.highlightDistance<600);assert.equal(result.stayed,true);assert.equal(result.cancelled,true)});
+
+    await check('a main-head click is not redirected to a different fire that is farther forward', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);w.F.gust=true;
+      w.F.lobes.push({ox:14000,oy:-10000,dx:Math.SQRT1_2,dy:-Math.SQRT1_2,s:2000,lb:5,kind:'s',held:false});
+      const global=w.realHead(),head=[Math.SQRT1_2*w.F.s,-Math.SQRT1_2*w.F.s],u=r.mkUnit({type:'TK',name:'main crew',x:5830,y:-5574});w.units.push(u);w.S.sel.add(u.id);w.setMode('direct');w.onMapClick(...head);
+      return{globalDistance:Math.hypot(global[0]-head[0],global[1]-head[1]),main:u.target.focusMain,type:u.target.type,highlight:r.attackEdge(u).anchor};
+    }, result => {assert.ok(result.globalDistance>600);assert.equal(result.main,true);assert.equal(result.type,'head');assert.ok(Math.hypot(result.highlight[0]-Math.SQRT1_2*6000,result.highlight[1]+Math.SQRT1_2*6000)<600)});
+
+    await check('a player spot-head assignment retains that spot and head role', () => {
+      const w=window.__sim,r=window.__test,l={ox:11000,oy:0,dx:1,dy:0,s:1000,lb:5,kind:'s',held:false};w.F.lobes.push(l);w.F.gust=true;
+      const u=r.mkUnit({type:'TK',name:'spot crew',x:11800,y:450});w.units.push(u);w.S.sel.add(u.id);w.setMode('direct');w.onMapClick(12000,0);
+      const held=u.headHold&&u.target.lobe===l&&u.target.role===0,edge=r.attackEdge(u);
+      w.F.gust=false;l.chk=1000;w.S.t=100-u.id;w.NV.budget=4;r.autoStep();
+      return{held,highlightDistance:Math.hypot(edge.anchor[0]-12000,edge.anchor[1]),released:!u.headHold,sameSpot:u.target&&u.target.lobe===l,role:u.target&&u.target.role,goalDistance:Math.hypot(...r.targetGoal(u).map((v,i)=>v-[12000,0][i]))};
+    }, result => {assert.equal(result.held,true);assert.ok(result.highlightDistance<600);assert.equal(result.released,true);assert.equal(result.sameSpot,true);assert.equal(result.role,0);assert.ok(result.goalDistance<600)});
+
+    await check('a player head order queued during a refill keeps its intent after the fill', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);w.F.gust=true;w.S.heat=0;w.S.mayday=0;
+      const u=r.mkUnit({type:'TK',name:'refilling player crew',x:4400,y:-3800,state:'filling',water:1000,fillT:1,fillSrc:{kind:'dam'}});w.units.push(u);w.S.sel.add(u.id);w.setMode('direct');w.onMapClick(Math.SQRT1_2*w.F.s,-Math.SQRT1_2*w.F.s);
+      const queued=!!(u.resume&&u.resume.playerClick&&u.resume.headRequest&&u.resume.headRequest.focusMain);w.tick();
+      return{queued,head:u.target&&u.target.type==='head'&&u.target.playerHead,holding:u.headHold};
+    }, result => {assert.equal(result.queued,true);assert.equal(result.head,true);assert.equal(result.holding,true)});
+
+    await check('a manual head order approaches without a road check and two shoulders actually check the head', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);w.F.gust=false;w.F.brk=null;w.F.checkedUntil=0;w.F.airSlow=0;w.S.heat=0;w.S.mayday=0;
+      w.NV.spd=new Float32Array(w.NV.w*w.NV.h).fill(12/3.6);
+      const u=r.mkUnit({type:'TK',name:'left crew',x:5300,y:-3200,cap:8000,water:8000,res:500});w.units.push(u);w.S.sel.add(u.id);w.setMode('direct');w.onMapClick(Math.SQRT1_2*w.F.s,-Math.SQRT1_2*w.F.s);
+      const approached=u.state==='moving'&&!!u.path&&!u.headHold,clear=u.path&&r.firePathClear(u.path),g=r.playerHeadGoal(u),normal=[Math.SQRT1_2,Math.SQRT1_2];
+      u.x=g[0]+normal[0]*60;u.y=g[1]+normal[1]*60;u.state='attack';u.path=null;const before=u.water;
+      for(let i=0;i<60;i++){w.S.t++;r.crewStep()}
+      const waiting=u.water===before&&w.F.prog===0;
+      const v=r.mkUnit({type:'TK',name:'right crew',cap:8000,water:8000,res:500,state:'attack',tac:'direct',target:{type:'head',playerHead:true,focusMain:true}});w.units.push(v);
+      const h=r.playerHeadGoal(v);v.x=h[0]-normal[0]*60;v.y=h[1]-normal[1]*60;
+      const split=u.target.shoulder!==v.target.shoulder,pincer=r.playerHeadPincer();
+      for(let i=0;i<500;i++){w.S.t++;r.crewStep()}
+      return{approached,clear,waiting,split,pincer,checked:w.F.checkedUntil>w.S.t,used:u.water<before,heldTarget:u.target&&u.target.playerHead};
+    }, result => {assert.equal(result.approached,true);assert.equal(result.clear,true);assert.equal(result.waiting,true);assert.equal(result.split,true);assert.equal(result.pincer,true);assert.equal(result.checked,true);assert.equal(result.used,true);assert.equal(result.heldTarget,true)});
+
+    await check('two manually ordered tankers drive to opposite shoulders and begin suppression', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);w.F.gust=false;w.F.brk=null;w.F.checkedUntil=0;w.F.airSlow=0;
+      w.NV.spd=new Float32Array(w.NV.w*w.NV.h).fill(12/3.6);
+      const a=r.mkUnit({type:'TK',name:'approach one',x:5300,y:-3200,cap:8000,water:8000,res:500}),b=r.mkUnit({type:'TK',name:'approach two',x:3200,y:-5300,cap:8000,water:8000,res:500});w.units.push(a,b);w.S.sel.add(a.id);w.S.sel.add(b.id);w.setMode('direct');w.onMapClick(Math.SQRT1_2*w.F.s,-Math.SQRT1_2*w.F.s);
+      const planned=[a,b].every(u=>u.state==='moving'&&u.path&&r.firePathClear(u.path));let worked=false;
+      for(let i=0;i<1000;i++){w.S.t++;w.NV.budget=4;r.autoStep();r.moveUnits();r.crewStep();worked=worked||w.F.headWork>=2}
+      return{planned,split:a.target.shoulder!==b.target.shoulder,worked,checked:w.F.checkedUntil>w.S.t,active:[a,b].every(u=>['attack','head'].includes(u.state))};
+    }, result => {assert.equal(result.planned,true);assert.equal(result.split,true);assert.equal(result.worked,true);assert.equal(result.checked,true);assert.equal(result.active,true)});
+
+    await check('a manual spot pincer works on that spot without checking the distant main head', () => {
+      const w=window.__sim,r=window.__test,l={ox:11000,oy:0,dx:1,dy:0,s:1000,lb:5,kind:'s',held:false,chk:0,work:0};w.F.lobes.push(l);w.F.gust=false;w.F.brk=null;w.F.checkedUntil=0;w.F.airSlow=0;
+      for(let i=0;i<2;i++){const u=r.mkUnit({type:'TK',name:'spot crew '+i,state:'attack',tac:'direct',cap:8000,water:8000,res:500,target:{type:'lobe',lobe:l,role:0,playerHead:true}});w.units.push(u);const g=r.playerHeadGoal(u);u.x=g[0];u.y=g[1]+u.target.shoulder*60}
+      const pincer=r.playerHeadPincer(l);
+      for(let i=0;i<500;i++){w.S.t++;r.crewStep()}
+      return{pincer,spotChecked:l.chk>w.S.t,mainChecked:w.F.checkedUntil>w.S.t,rearTasks:w.units.some(u=>r.lineTask(u,u.target))};
+    }, result => {assert.equal(result.pincer,true);assert.equal(result.spotChecked,true);assert.equal(result.mainChecked,false);assert.equal(result.rearTasks,false)});
+
+    await check('truck hit testing switches selection in every order mode using the painted position', () => {
+      const w=window.__sim,r=window.__test;w.view().k=.1;
+      const a=r.mkUnit({type:'TK',name:'one',x:0,y:0}),b=r.mkUnit({type:'TK',name:'two',x:4000,y:0});w.units.push(a,b);w.S.sel.add(a.id);
+      const results=[];for(const mode of ['go','direct','parallel','indirect','defend','patrol','fill','boost']){w.setMode(mode,{arm:false});w.onMapClick(b.x,b.y);results.push(w.S.sel.size===1&&w.S.sel.has(b.id)&&!a.lastOrder);w.onMapClick(a.x,a.y)}
+      w.S.running=true;a.prevX=2000;a.prevY=0;const painted=r.unitAt(2000,0);
+      return{results,painted:painted&&painted.id===a.id};
+    }, result => {assert.ok(result.results.every(Boolean));assert.equal(result.painted,true)});
+
+    await check('a supply-truck click remains a refill target in Draw water mode', () => {
+      const w=window.__sim,r=window.__test,u=r.mkUnit({type:'TK',name:'tanker',x:0,y:0}),sup=r.mkUnit({type:'SUP',name:'water truck',x:2000,y:2000,state:'wpoint',stock:12000});
+      w.units.push(u,sup);w.S.sel.add(u.id);w.setMode('fill');w.onMapClick(sup.x,sup.y);
+      return{selected:w.S.sel.has(u.id)&&w.S.sel.size===1,fill:u.tgt&&u.tgt.kind==='fill'&&u.tgt.src.unit===sup};
+    }, result => {assert.equal(result.selected,true);assert.equal(result.fill,true)});
+
+    await check('terrain travel detours around active fire and stops short of a burning destination', () => {
+      const w=window.__sim,r=window.__test;
+      w.NV.spd=new Float32Array(w.NV.w*w.NV.h).fill(12/3.6);
+      w.F.lobes.push({ox:2500,oy:-3000,dx:1,dy:0,s:1000,lb:4,kind:'s',held:false});
+      const crossing=r.fireSegmentClear(1800,-3000,4500,-3000),detour=w.navRoute(1800,-3000,4500,-3000),approach=w.navRoute(1800,-3000,3500,-3000);
+      const end=approach&&approach.path.at(-1);
+      return {crossing,detour:!!detour,clear:detour&&r.firePathClear(detour.path),approach:!!approach,endRisk:end&&r.fireRouteRisk(...end),distance:end&&Math.hypot(end[0]-3500,end[1]+3000)};
+    }, result => {
+      assert.equal(result.crossing,false);
+      assert.equal(result.detour,true);
+      assert.equal(result.clear,true);
+      assert.equal(result.approach,true);
+      assert.equal(result.endRisk,0);
+      assert.ok(result.distance>=200&&result.distance<=280);
+    });
+
+    await check('a blocked corridor never falls back to an unprotected route', () => {
+      const w=window.__sim,r=window.__test,N=w.NV;
+      N.spd=new Float32Array(N.w*N.h);
+      const j=Math.floor((-3000-N.y0)/N.c);
+      for(let i=0;i<N.w;i++)N.spd[j*N.w+i]=12/3.6;
+      w.F.lobes.push({ox:3000,oy:-3000,dx:1,dy:0,s:200,lb:4,kind:'s',held:false});
+      const u=r.mkUnit({type:'TK',name:'corridor crew',x:2600,y:-3000});
+      return {grid:w.navRoute(2600,-3000,3800,-3000),travel:w.offRoute(u,[3800,-3000])};
+    }, result => {assert.equal(result.grid,null);assert.equal(result.travel,null)});
+
+    await check('a flank approach reaches a clear working position within hose reach', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);
+      w.NV.spd=new Float32Array(w.NV.w*w.NV.h).fill(12/3.6);
+      const q=r.edgePt(60,1),goal=[q[0]-Math.SQRT1_2*20,q[1]-Math.SQRT1_2*20],start=[q[0]+Math.SQRT1_2*400,q[1]+Math.SQRT1_2*400];
+      const route=w.navRoute(...start,...goal,null,r.TACTICS.reach),end=route&&route.path.at(-1);
+      return {found:!!route,clear:route&&r.firePathClear(route.path),distance:end&&Math.hypot(end[0]-goal[0],end[1]-goal[1]),inside:end&&w.burntAt(...end)};
+    }, result => {assert.equal(result.found,true);assert.equal(result.clear,true);assert.ok(result.distance<=80)});
+
+    await check('road routes do not bypass the active-fire check', () => {
+      const w=window.__sim,r=window.__test,a=w.nearestNode(0,0),b=w.nearestNode(6000,-6000),before=w.route(a,b);
+      const q=before.path[Math.floor(before.path.length/2)];
+      w.F.lobes.push({ox:q[0]-400,oy:q[1],dx:1,dy:0,s:400,lb:4,kind:'s',held:false});
+      const after=w.route(a,b);
+      return {oldBlocked:!r.firePathClear(before.path),newClear:!after||r.firePathClear(after.path)};
+    }, result => {assert.equal(result.oldBlocked,true);assert.equal(result.newClear,true)});
+
+    await check('a moving appliance waits when fire cuts its route and resumes when it clears', () => {
+      const w=window.__sim,r=window.__test;
+      const u=r.mkUnit({type:'TK',name:'travelling crew',x:2900,y:-3000,state:'moving',path:[[2900,-3000],[3800,-3000]],tgt:{kind:'go'}});w.units.push(u);
+      w.F.lobes.push({ox:3000,oy:-3000,dx:1,dy:0,s:200,lb:4,kind:'s',held:false});w.NV.budget=0;
+      r.moveUnits();const stopped={x:u.x,y:u.y,blocked:u.routeBlocked,reported:w.S.log.some(x=>x.msg.includes('route blocked by active fire'))};
+      w.F.lobes=[];w.S.t++;r.moveUnits();
+      return {stopped,resumed:u.x>2900&&!u.routeBlocked};
+    }, result => {assert.deepEqual(result.stopped,{x:2900,y:-3000,blocked:true,reported:true});assert.equal(result.resumed,true)});
+
+    await check('a distant fire cut does not halt a clear approach but cannot be crossed', () => {
+      const w=window.__sim,r=window.__test,u=r.mkUnit({type:'TK',name:'long approach',x:1500,y:-3000,state:'moving',path:[[1500,-3000],[3800,-3000]],tgt:{kind:'go'}});w.units.push(u);
+      w.F.lobes.push({ox:3000,oy:-3000,dx:1,dy:0,s:200,lb:4,kind:'s',held:false});w.NV.budget=0;r.moveUnits();const started=u.x>1500;let exposed=false;
+      for(let i=0;i<100;i++){w.S.t++;r.moveUnits();exposed=exposed||r.fireRouteRisk(u.x,u.y)>0}
+      return{started,exposed,stopped:u.routeBlocked&&u.x<3000};
+    }, result => {assert.equal(result.started,true);assert.equal(result.exposed,false);assert.equal(result.stopped,true)});
+
+    await check('the NE flank receives the head buffer after the wind change and secured edge stays passable', () => {
+      const w=window.__sim,r=window.__test;w.F.s=6000;w.F.hwL.fill(300);w.F.hwR.fill(300);
+      const q=r.edgePt(60,1),p=[q[0]+Math.SQRT1_2*150,q[1]+Math.SQRT1_2*150];
+      const before=r.fireRouteRisk(...p);w.F.wc=true;w.F.wcS=w.F.s;w.S.t++;const after=r.fireRouteRisk(...p);
+      w.F.hL.fill(1);w.S.t++;const secured=r.fireRouteRisk(...p);
+      return {before,after,secured};
+    }, result => {assert.equal(result.before,0);assert.ok(result.after>0);assert.equal(result.secured,0)});
+
     await check('navigation follows roads and blocks water at their actual coordinates', () => {
       const { MAP, buildNav } = window.__test;
       const { NV } = window.__sim;
@@ -148,11 +293,17 @@ const testHtml = html.replace('window.__sim={',
         results.push(!u.autoManaged && u.path === route && u.target === target);
       }
       u.state = 'idle'; u.autoManaged = true; u.water = u.res + 1;
-      const d = w.DAMS.find(d => d.g);
-      w.issue(u, 'fill', d.x, d.y, { src: { kind: 'dam', d } }); const fillRoute = u.path;
+      // This checks task priority, so give the fill a reachable clear approach.
+      // Fire-aware access itself is exercised by the navigation checks above.
+      w.F.s = 0; w.F.hwL.fill(0); w.F.hwR.fill(0);
+      w.NV.spd = new Float32Array(w.NV.w * w.NV.h).fill(12 / 3.6);
+      const s = w.SRC[0] || r.FPS[0]; u.x = s.x + 500; u.y = s.y;
+      w.issue(u, 'fill', s.x, s.y, { src: { kind: 'hyd', s } }); const fillRoute = u.path;
+      if (!fillRoute) return results.concat(false, false);
       for (let t = 200; t < 300; t++) { w.S.t = t; r.autoStep(); }
       results.push(u.path === fillRoute && u.tgt.kind === 'fill');
       // Completing a refill rejoins today's work, not the old destination.
+      w.F.s = 4000; w.F.hwL.fill(300); w.F.hwR.fill(300); u.x = 2000; u.y = -2000;
       u.path = null; u.target = null; u.state = 'filling'; u.fillT = 1; u.fillSrc = { kind: 'dam' };
       u.resume = { mode: 'direct', wx: -10000, wy: 10000, type: 'head' }; u.resumeAuto = 1;
       w.S.t = 400; w.tick();
