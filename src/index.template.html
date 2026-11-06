@@ -97,7 +97,7 @@ td.num{font-family:var(--font-mono)}
         <div><b id="wxWind"></b><div id="wxGust"></div></div></div>
       <dl class="wx-d"><dt>Temp</dt><dd id="wxT"></dd><dt>Humidity</dt><dd id="wxRH"></dd><dt>Dead fuel</dt><dd id="wxMC"></dd><dt>Head ROS</dt><dd id="wxF"></dd><dt>Area</dt><dd id="wxA"></dd><dt>Main held</dt><dd id="wxHd"></dd><dt>Head attack</dt><dd id="wxHA"></dd><dt>NE flank held</dt><dd id="wxNE"></dd><dt>Township</dt><dd id="wxTn"></dd><dt>Fingers/spots</dt><dd id="wxL"></dd></dl>
       <div id="wxNote" class="wx-n"></div><div class="wx-n">Drag to pan, wheel to zoom.</div></div>
-    <div class="attrib">Map data &copy; OpenStreetMap contributors (ODbL)</div>
+    <div class="attrib"><span style="color:var(--warn)">Amber: knockdown</span> · <span style="color:var(--good)">Green: secured</span> · Map data &copy; OpenStreetMap contributors (ODbL)</div>
   </div>
   <div class="side">
     <div class="tabs" id="tabs"><button data-t="units" class="on">Units</button><button data-t="cmd">Command</button><button data-t="log">Log</button><button data-t="fac">Facilitator</button><button data-t="ass">Assumptions</button></div>
@@ -243,7 +243,7 @@ function scheduleUnit(o,departS,travelMin){S.pend.push({at:departS,o,travelMin})
 function spawn(p){const o=p.o,from=Array.isArray(o.from)?o.from:STN[o.from];const n=nearestNode(from[0],from[1]),poi=POI_NODE();const r=route(n,poi);
   const u=mkUnit(o);u.x=NX[n];u.y=NY[n];u.speedMul=1;
   units.push(u);if(r){u.path=r.path;u.pi=0;u.state='moving'}logE(`${u.name} departs${o.crewNote?' ('+o.crewNote+')':''}.`,'good');
-  if(u.type!=='SUP'&&S.autoHead!==false&&S.comms){const hp=realHead();if(F.s>1)issue(u,'direct',hp[0],hp[1],{auto:true})}
+  if(u.type!=='SUP'&&S.autoHead!==false){u.autoManaged=true;u.autoMul=1;u.state='idle';u.path=null;u.taskAt=-COORD.commit;taskAuto(u)}
   dirty=1;renderUnits()}
 
 /* ---------- logging ---------- */
@@ -274,17 +274,17 @@ function initialDispatch(){const first={};
   const o={type:ty,name:nm,from:fr,team:'-',real:true};if(nm==='Marong T2')o.crewNote='4 crew';if(i===0)first[fr]=S.t+turnout();const at=i===0?first[fr]:first[fr]+120+Math.floor(rand()*241);scheduleUnit(o,at,0)});
  logE('Initial attack paged. First truck from each brigade turns out in 2 to 5 min; the second follows 2 to 6 min after it (random). Maiden Gully and Lockwood respond with light tankers.','fac')}
 function revealGoodDam(){let best=null,bd=1e18;DAMS.forEach(d=>{const dd=Math.hypot(d.x-2600,d.y+4300);if(d.area>1500&&dd<bd){bd=dd;best=d}});if(best){best.known=2;best.usable=true;best.farmer=true;goodDam=best;S.reports.push({x:best.x,y:best.y,t:S.t,label:"Farmer's dam"});logE('Farmer dam marked on map (confirmed usable).','inject');dirty=1}}
-function windChange(){if(F.wc)return;F.wc=true;F.wcS=F.s;F.wcAt=S.t;
+function windChange(){if(F.wc)return;F.lineL=null;F.headWork=0;F.prog=0;F.wc=true;F.wcS=F.s;F.wcAt=S.t;
  {const fm=new Float32Array(NS);let i0=0;while(i0<NS){const w=5+Math.floor(rand()*8),m=.3+rand()*1.3;for(let j=i0;j<Math.min(NS,i0+w);j++)fm[j]=m;i0+=w}
   for(let pass=0;pass<3;pass++){const c=fm.slice();for(let i=2;i<NS-2;i++)fm[i]=(c[i-2]+c[i-1]+c[i]+c[i+1]+c[i+2])/5}
   let sum=0,n=0;for(let i=0;i<NS;i++){if(uOf(i)>=0&&uOf(i)<=F.wcS){sum+=fm[i];n++}}const mean=n?sum/n:1;for(let i=0;i<NS;i++)fm[i]/=mean||1;F.fm=fm}
 $('wind').textContent='Wind SW (change passed)';
  for(let i=0;i<NS;i++){ // unattended held flank fails
-   if(F.hL[i]){const x=F.hwL[i];let att=false;for(const u of units){if(u.eng&&u.state==='attack'&&dist2Edge(u)<250){att=true;break}}if(!att){F.hL[i]=0}}
+   if(F.hL[i]){const q=edgePt(i,1);let att=false;for(const u of units){if(u.eng&&u.state==='attack'&&Math.hypot(u.x-q[0],u.y-q[1])<250){att=true;break}}if(!att){F.hL[i]=0}}
  }
  logE('Unattended held sections of the NE flank have failed.','bad');
  for(const l of F.lobes){if(l.held)continue;F.dead.push({ox:l.ox,oy:l.oy,dx:l.dx,dy:l.dy,s:l.s,lb:l.lb,held:false,dead:true});
-  const tx=l.ox+l.dx*l.s,ty=l.oy+l.dy*l.s,d=rot(LEFT[0],LEFT[1],(l.jit||0)*.6);l.ox=tx;l.oy=ty;l.dx=d[0];l.dy=d[1];l.s=20;l.lb=Math.max(4,l.lb||5);l.hl={};l.hr={};l.fzl={};l.fzr={};l.chk=0;l.prog=0;l.brk=null}
+  const tx=l.ox+l.dx*l.s,ty=l.oy+l.dy*l.s,d=rot(LEFT[0],LEFT[1],(l.jit||0)*.6);l.ox=tx;l.oy=ty;l.dx=d[0];l.dy=d[1];l.s=20;l.lineL=null;l.lineR=null;l.headWork=0;l.lb=Math.max(4,l.lb||5);l.hl={};l.hr={};l.fzl={};l.fzr={};l.chk=0;l.prog=0;l.brk=null}
 
  let n=0;for(const u of units){if(!ACTX.includes(u.state)||u.type==='SUP'||u.warn)continue;if(exposedAtChange(u)){n++;u.warn=S.t+120}}
  if(n)logE(`<b>Wind change: ${n} crew${n>1?'s are':' is'} working beside an uncontrolled edge.</b> Anyone still there in 2 min is exposed to burnover. Pull them back to burnt ground or a safe area.`,'warn')}
@@ -318,14 +318,89 @@ function lobeW(l,u,side){const base=hwAt(u,l.s,l.lb);if(u<0)return base;const f=
 function lobeBmax(l){return Math.max(0,Math.floor((l.s-120)/40))}
 function lobeMark(l,side,b0,b1){l.hl=l.hl||{};l.hr=l.hr||{};l.fzl=l.fzl||{};l.fzr=l.fzr||{};const h=side>0?l.hl:l.hr,f=side>0?l.fzl:l.fzr,bm=lobeBmax(l);for(let b=Math.max(0,b0);b<=Math.min(bm,b1);b++){h[b]=1;if(f[b]===undefined)f[b]=hwAt(b*40+20,l.s,l.lb)}}
 function lobeCov(l){if(l.s<120)return 0;const bm=lobeBmax(l);let n=0;for(let b=0;b<=bm;b++){if(l.hl&&l.hl[b])n++;if(l.hr&&l.hr[b])n++}return n/(2*(bm+1))}
-function lobeCheck(l){if(l.held)return;if(l.s<120||(S.t<(l.chk||0)&&lobeSideCov(l,1).cov>=.9&&lobeSideCov(l,-1).cov>=.9)){l.held=true;logE(`<b>${l.kind==='s'?'Spot fire':'Finger'} contained.</b> Head checked and both flanks held.`,'good')}}
+function lobeCheck(l){if(l.held)return;if(l.s<120||((S.t<(l.chk||0)||(anchoredThrough(1,lobeBmax(l),l)&&anchoredThrough(-1,lobeBmax(l),l)))&&lobeSideCov(l,1).cov>=.9&&lobeSideCov(l,-1).cov>=.9)){l.held=true;logE(`<b>${l.kind==='s'?'Spot fire':'Finger'} contained.</b> Head checked and both flanks held.`,'good')}}
 function lobeSideCov(l,side){const bm=lobeBmax(l),h=side>0?l.hl:l.hr;let n=0,first=-1;for(let b=0;b<=bm;b++){if(h&&h[b])n++;else if(first<0)first=b}return{cov:n/(bm+1),first:first<0?bm:first}}
 function lobeGoal(l,u){const nx=-l.dy,ny=l.dx,hdUp=S.t>=(l.chk||0);let role=1;
-  if(u){const cr=units.filter(o=>o.target&&o.target.type==='lobe'&&o.target.lobe===l&&o.state!=='offline').sort((x,y)=>x.id-y.id),ix=Math.max(0,cr.indexOf(u));role=ix%3}
+  if(u&&u.target&&u.target.lobe===l){if(u.target.role==null){const counts=[0,0,0];for(const o of units)if(o!==u&&o.target&&o.target.lobe===l&&o.target.role!=null&&['moving','attack','head'].includes(o.state))counts[o.target.role]++;u.target.role=counts.indexOf(Math.min(...counts))}role=u.target.role}
+  if(l.s>=120&&!headAttackSuitable(l)){if(u&&u.target){u.target.side=role===2?-1:1;const task=lineTask(u,u.target);if(task)return task.goal}}
   if(hdUp&&(role===0||lobeCov(l)>=.6)){const al=Math.max(0,l.s-30);return[l.ox+l.dx*al,l.oy+l.dy*al]}
   const a=lobeSideCov(l,1),b=lobeSideCov(l,-1);let sg=role===1?1:role===2?-1:((u&&u.id%2)?1:-1);if(sg>0&&a.cov>=.95)sg=-1;else if(sg<0&&b.cov>=.95)sg=1;
   const f=sg>0?a.first:b.first,al=Math.min(l.s*.9,f*40+20),w=lobeW(l,al,sg)+25;return[l.ox+l.dx*al+nx*sg*w,l.oy+l.dy*al+ny*sg*w]}
 function lobePts(l){const nx=-l.dy,ny=l.dx,s=l.s,h=hwAt(s*.5,s,l.lb);return[[l.ox+l.dx*s,l.oy+l.dy*s],[l.ox+l.dx*s*.5+nx*h,l.oy+l.dy*s*.5+ny*h],[l.ox+l.dx*s*.5-nx*h,l.oy+l.dy*s*.5-ny*h]]}
+
+/* Tactical model. Concepts: CFA public private-equipment guidance, pp. 48-49;
+   numerical limits below are simulation assumptions, not operational procedures. */
+const TACTICS={reach:80,standOff:20,maxGap:4,followRate:2,grace:180,decay:120,headWork:900,recover:180,minHead:2,windLead:120,rotateAt:.35,freshAt:.65,reliefRange:600};
+function headAttackSuitable(l){return !F.gust&&(l?!!(l.brk||S.t<(l.chk||0)):!F.wc&&!!(F.brk||S.t<F.checkedUntil||S.t<(F.airSlow||0)))}
+function lineState(side,l){const o=l||F,key=side>0?'lineL':'lineR';
+  if(!o[key])o[key]={knock:{},mop:{},wet:{}};return o[key]}
+function linePlan(side,l){const data=lineState(side,l),held=l?(side>0?(l.hl||(l.hl={} )):(l.hr||(l.hr={} ))):(side>0?F.hL:F.hR);
+  const anchor=l?0:OFF+1,end=l?lobeBmax(l):Math.min(NS-1,Math.floor(((F.wc?F.wcS:F.s)-120)/DS)+OFF);
+  let secure=anchor;while(secure<=end&&held[secure])secure++;
+  let front=secure;while(front<=end&&(held[front]||(data.knock[front]||0)>=1))front++;
+  return{data,held,anchor,end,secure,front,side,lobe:l}}
+function linePoint(p,i,inside=TACTICS.standOff){
+  if(p.lobe){const l=p.lobe,s=Math.min(l.s,Math.max(0,i*DS+DS/2)),w=Math.max(0,lobeW(l,s,p.side)-inside);return[l.ox+l.dx*s-l.dy*w*p.side,l.oy+l.dy*s+l.dx*w*p.side]}
+  const s=uOf(i),w=Math.max(0,(p.side>0?F.hwL[i]:F.hwR[i])-inside);return[AXIS[0]*s+LEFT[0]*w*p.side,AXIS[1]*s+LEFT[1]*w*p.side]}
+function sameLine(a,b){return a&&b&&a.type===b.type&&(a.type==='flank'?a.side===b.side:a.type==='lobe'&&a.lobe===b.lobe&&a.side===b.side)}
+function lineTask(u,tg){
+  if(tg.type==='lobe'){
+    if(tg.role===0&&headAttackSuitable(tg.lobe))return null;
+    // Small spots retain the existing quick knockdown model.
+    if(tg.lobe.s<120)return null;
+    if(tg.side==null)tg.side=(u.id%2)?1:-1;
+  }
+  if(tg.type!=='flank'&&tg.type!=='lobe')return null;
+  const p=linePlan(tg.side,tg.type==='lobe'?tg.lobe:null);if(p.end<p.anchor)return null;
+  const peers=units.filter(o=>o!==u&&o.type!=='SUP'&&o.target&&sameLine(o.target,tg)&&!['offline','medical','burnover','retreat','standdown','rehab'].includes(o.state));
+  if(!tg.lineRole){const roles=['knockdown','blackout','knockdown','blackout','relief'],counts={knockdown:0,blackout:0,relief:0};for(const o of peers)if(o.target.lineRole)counts[o.target.lineRole]++;
+    tg.lineRole=roles.find((r,i)=>roles.slice(0,i+1).filter(x=>x===r).length>counts[r])||'blackout'}
+  const gap=p.front-p.secure,working=peers.filter(o=>['attack','head'].includes(o.state)&&o.water>o.res);
+  let role=tg.lineRole;
+  if(role==='relief'&&!working.some(o=>o.target.lineRole==='blackout'&&Math.hypot(o.x-linePoint(p,Math.min(p.secure,p.end))[0],o.y-linePoint(p,Math.min(p.secure,p.end))[1])<=TACTICS.reach))role='blackout';
+  if(role==='knockdown'&&(gap>=TACTICS.maxGap||p.front>p.end))role='blackout';
+  if(role==='blackout'&&gap===0&&p.front<=p.end)role='knockdown';
+  // A lone crew alternates the two stages; a missing lead can be covered locally.
+  if(role==='blackout'&&gap<TACTICS.maxGap&&p.front<=p.end&&!working.some(o=>o.target.lineRole==='knockdown')&&peers.length===0)role='knockdown';
+  const i=Math.min(p.end,role==='knockdown'?p.front:role==='relief'?Math.max(p.anchor,p.secure-2):p.secure);tg.i=i;u.anchor=linePoint(p,p.anchor);
+  return{...p,i,role,goal:linePoint(p,i)}}
+function lineWork(u,f){const tg=u.target,task=tg&&lineTask(u,tg);if(!task)return false;
+  u.workRole=task.role;if(task.role==='relief')return true;u.anchor=linePoint(task,task.anchor);
+  if(Math.hypot(u.x-task.goal[0],u.y-task.goal[1])>TACTICS.reach)return true;
+  const {i,data,held}=task;if(held[i]){u.workRole='patrol';return true}
+  const rate=(kmFuelAt(u.x,u.y)==='crop'?90:160)/60/DS*f;
+  data.wet[i]=S.t;
+  if(task.role==='knockdown')data.knock[i]=Math.min(1,(data.knock[i]||0)+rate);
+  else if((data.knock[i]||0)>=1){data.mop[i]=Math.min(1,(data.mop[i]||0)+rate*TACTICS.followRate);
+    if(data.mop[i]>=1){if(task.lobe)lobeMark(task.lobe,task.side,i,i);else held[i]=1}}
+  if(task.lobe)lobeCheck(task.lobe);return true}
+function decayLines(){for(const o of[F,...F.lobes])for(const key of['lineL','lineR']){const d=o[key];if(!d)continue;const held=o===F?(key==='lineL'?F.hL:F.hR):(key==='lineL'?o.hl:o.hr)||{};
+  for(const k of Object.keys(d.knock)){if(held[k]||S.t-(d.wet[k]||0)<=TACTICS.grace)continue;d.knock[k]=Math.max(0,d.knock[k]-1/TACTICS.decay);d.mop[k]=Math.max(0,(d.mop[k]||0)-1/TACTICS.decay)}}}
+function lineSpread(i,side){const d=side>0?F.lineL:F.lineR;return 1-.8*(d&&d.knock[i]||0)}
+function anchoredThrough(side,i,l){const p=linePlan(side,l);return p.secure>i}
+function tacticalPressure(headCrews){
+  F.hcN=headCrews;F.headWork=headAttackSuitable()?headCrews:0;F.waitSp=cplxOpen();
+  if(headCrews>=TACTICS.minHead&&headAttackSuitable())F.prog=Math.min(F.waitSp>0?7:8,F.prog+8*headCrews/TACTICS.headWork);
+  else F.prog=Math.max(0,F.prog-8/TACTICS.recover);
+  if(F.prog>=8&&S.t>=F.checkedUntil){F.checkedUntil=S.t+8*60;F.prog=0;logE('Coordinated head attack checks the head. Secure both shoulders before the check recovers.','good')}
+}
+function windUnsafe(tg){return tg&&tg.type==='flank'&&tg.side>0&&((!F.wc&&S.wcAt-S.t<=TACTICS.windLead)||(F.wc&&!headAttackSuitable()))}
+function tacticalFallback(u){const tg=u.target;if(!windUnsafe(tg))return false;
+  if(!u.safetyHold){const p=linePlan(tg.side),i=Math.max(p.anchor,Math.min(p.end,tg.i||p.anchor)),g=linePoint(p,i,Math.max(200,(F.hwL[i]||0)/2));
+    const route=offRoute(u,g),end=route&&route.path[route.path.length-1];if(route&&end&&burntAt(end[0],end[1])){u.path=route.path;u.psp=route.psp;u.pspFor=route.path;u.pi=0;u.state='moving';u.tgt={kind:'safety'};u.safetyHold=true;u.workRole='fallback';
+      logE(`${u.name} falling back into burnt ground ahead of the exposed NE edge. Awaiting a suitable tactic after the wind change.`,'warn')}else{u.path=null;u.state='idle';u.safetyHold=true;logE(`${u.name}: no mapped route to the burnt refuge. Withdrawal tasking required.`,'warn')}}
+  return true}
+function rotateForWater(u){const tg=u.target;if(!tg||!['flank','lobe'].includes(tg.type)||!['attack','head'].includes(u.state)||u.direct||!S.autoRefill)return false;
+  if(u.water-u.res>(u.cap-u.res)*TACTICS.rotateAt)return false;
+  const peers=units.filter(o=>o!==u&&o.type!=='SUP'&&o.team===u.team&&o.target&&sameLine(o.target,tg));
+  if(peers.some(o=>o.reliefId))return false;
+  if(units.some(o=>o!==u&&o.refillLine&&sameLine(o.refillLine,tg)&&['moving','filling'].includes(o.state)))return false;
+  let relief=u.reliefId&&units.find(o=>o.id===u.reliefId&&peers.includes(o));
+  if(!relief){relief=peers.filter(o=>o.water-o.res>(o.cap-o.res)*TACTICS.freshAt&&Math.hypot(o.x-u.x,o.y-u.y)<TACTICS.reliefRange).sort((a,b)=>b.water/b.cap-a.water/a.cap)[0];
+    if(!relief)return false;u.reliefId=relief.id;relief.target.lineRole=tg.lineRole||'knockdown';relief.lastAuto=0;const g=targetGoal(relief);if(g)reroute2(relief,g[0],g[1],true);
+    logE(`${relief.name} taking over from ${u.name} before its refill.`,'')}
+  const g=targetGoal(relief);if(!g||!['attack','head'].includes(relief.state)||Math.hypot(relief.x-g[0],relief.y-g[1])>TACTICS.reach)return false;
+  u.refillLine={...tg};u.reliefId=null;return seekWater(u)}
 
 /* ---------- fire engine (1 s steps) ---------- */
 const kmFuel=()=>F.fuel;
@@ -338,7 +413,7 @@ function stepFire(){
   if(S.t<F.checkedUntil&&!F.wc)F.chkT=(F.chkT||0)+1;
   if(F.wc)ros*=0.12;else if(S.t<F.checkedUntil)ros*=0.15;
   {const ua=Math.max(urbanAt(AXIS[0]*F.s,AXIS[1]*F.s),urbanAt(AXIS[0]*(F.s+200),AXIS[1]*(F.s+200)));F.urb=ua;if(ua>0&&!F.wc){ros*=urbFac(ua);if(!F.urbLog){F.urbLog=true;logE('<b>Head reaches the edge of Marong.</b> Grass fire does not run through houses, roads and gardens like it does through paddocks, so spread slows sharply. Embers and spot fires ahead of and around the town increase. CFA advice: move at least 2 blocks away from grassland.','warn')}}}
-  if(S.t<(F.airSlow||0))ros*=(F.airF||.2);
+  if(S.t<(F.airSlow||0))ros*=(F.airF||.2);if(headAttackSuitable())ros*=1-Math.min(.65,(F.headWork||0)*.15);
   {const hp=headPoint();let n=0;for(const u of units){if(u.state==='defend'&&u.water>u.res){const al=u.x*AXIS[0]+u.y*AXIS[1],v=Math.abs(u.x*LEFT[0]+u.y*LEFT[1]);if(v<500&&al>F.s-300&&al<F.s+1500)n++}}F.defN=n;
    if(n>0&&!F.wc){const f=Math.max(.4,1-.12*n);ros*=f;if(!F.defLog||S.t-F.defLog>600){F.defLog=S.t;logE(`${n} crew${n>1?'s':''} defending in the path of the head. Spread reduced to about ${Math.round(f*100)}% by structure and road protection.`,'good')}}}
   if(!F.wc&&F.wood)ros*=.25;
@@ -347,8 +422,8 @@ function stepFire(){
     else if(ros>0){const hit=breakCheck(AXIS[0]*F.s,AXIS[1]*F.s,AXIS[0]*(F.s+ros/3.6),AXIS[1]*(F.s+ros/3.6),F.crossed);if(hit){F.brk=hit;ros=0;F.s=Math.min(F.s+ros/3.6,(hit.x*AXIS[0]+hit.y*AXIS[1])-3);logE(`<b>Head reaches ${hit.name} and is held at the road.</b> A sealed road is a break, until embers or a spot get across. Crews working the road make a crossing much less likely.`,'warn')}}}
   if(!F.wc&&ros>0){let nb=0;const hx=AXIS[0]*(F.s+30),hy=AXIS[1]*(F.s+30);for(const v of[-120,-60,0,60,120])if(lobeBurntAt(hx+LEFT[0]*v+F.lat*LEFT[0],hy+LEFT[1]*v+F.lat*LEFT[1]))nb++;
     if(nb){ros*=1-.9*nb/5;if(!F.bgLog||S.t-F.bgLog>600){F.bgLog=S.t;logE('<b>Head runs into ground already burnt by a spot fire.</b> No fuel there, so the head slows and has to find its way round.','good')}}}
-  if(!F.wc&&!F.pinched&&S.t<F.checkedUntil&&S.t%5===0){const cvr=arr=>{let n=0,h=0;for(let i=0;i<NS;i++){const u=uOf(i);if(u<F.s-650||u>F.s-150)continue;n++;if(arr[i])h++}return n?h/n:0};
-    if(cvr(F.hL)>=.85&&cvr(F.hR)>=.85){F.pinched=true;logE('<b>Head pinched off.</b> The head is checked and both flanks are held right up to it. It cannot run again while those lines hold.','good')}}
+  if(!F.wc&&!F.pinched&&S.t%5===0){const cvr=arr=>{let n=0,h=0;for(let i=0;i<NS;i++){const u=uOf(i);if(u<F.s-650||u>F.s-150)continue;n++;if(arr[i])h++}return n?h/n:0};
+    if(cvr(F.hL)>=.85&&cvr(F.hR)>=.85&&anchoredThrough(1,Math.floor((F.s-150)/DS)+OFF)&&anchoredThrough(-1,Math.floor((F.s-150)/DS)+OFF)){F.pinched=true;logE('<b>Head pinched off.</b> Both flanks are secured continuously from the anchor to the shoulders. It cannot run again while those lines hold.','good')}}
   if(F.pinched&&!F.wc)ros=0;
   if(F.contained)ros=0;
   if(!F.contained&&S.t>300&&S.t%30===0){const headOk=F.wc?(()=>{let n=0,h=0;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>F.wcS)continue;n++;if(F.hL[i])h++}return n>0&&h/n>=.92})():!!F.pinched;
@@ -359,15 +434,15 @@ function stepFire(){
     const tp=F.wc?F.wcS:F.s;if(S.t>=60&&(seen(AXIS[0]*tp,AXIS[1]*tp)||F.lkS===0))F.lkS=tp}
   // outline growth
   for(let i=0;i<NS;i++){const u=uOf(i);
-    if(!F.wc){ if(u>F.s&&u>0)break; const h=hwAt(u,F.s); if(F.drift[i]===undefined&&u<F.s-DS)F.drift[i]=F.lat;const dr=F.drift[i]!==undefined?F.drift[i]:F.lat;if(!F.hL[i])F.hwL[i]=Math.max(5,h+dr)+F.exL[i]; if(!F.hR[i])F.hwR[i]=Math.max(5,h-dr)+F.exR[i]; }
+    if(!F.wc){ if(u>F.s&&u>0)break; const h=hwAt(u,F.s); if(F.drift[i]===undefined&&u<F.s-DS)F.drift[i]=F.lat;const dr=F.drift[i]!==undefined?F.drift[i]:F.lat;if(!F.hL[i])F.hwL[i]+=Math.max(0,Math.max(5,h+dr)+F.exL[i]-F.hwL[i])*lineSpread(i,1); if(!F.hR[i])F.hwR[i]+=Math.max(0,Math.max(5,h-dr)+F.exR[i]-F.hwR[i])*lineSpread(i,-1); }
     else if(u>=-DS&&u<=F.wcS){ // new head runs NE (left flank), right flank static
       const t=Math.min(1,Math.max(0,u/F.wcS)),taper=Math.pow(t,1.3)*Math.min(1,(1-t)*10+0.15);
       if(!F.hL[i]&&!F.contained){const ex=AXIS[0]*u+LEFT[0]*F.hwL[i],ey=AXIS[1]*u+LEFT[1]*F.hwL[i],uf=urbanAt(ex,ey);if(uf>0&&!F.urbLog){F.urbLog=true;logE('<b>The new head reaches the edge of Marong.</b> Spread slows in the built-up area, but ember attack and spotting increase. CFA advice: move at least 2 blocks away from grassland.','warn')}const sk=Math.min(1.5,Math.max(.5,1+.9*Math.sin(dirOff(S.t))*(2*t-1)))*(inWood(ex,ey)?.25:1);F.hwL[i]+=rosKmh(F.fuelHist[Math.max(0,Math.floor(u/1000))]||'crop',WXV.post.wind)/3.6*taper*urbFac(uf)*sk*(F.fm?F.fm[i]:1)*defFac(ex,ey,400)}}}
   // lateral spread: forward 10, flank near the head about 1.2, towards the seat about 0.4. Not scaled by a head check. Side bias follows the wind swing.
   if(!F.wc&&!F.contained&&F.rb&&S.t>60){const R=F.rb/3.6,so=Math.sin(dirOff(S.t)),bL=Math.min(2.2,Math.max(.3,1+2*so)),bR=Math.min(2.2,Math.max(.3,1-2*so));
     for(let i=0;i<NS;i++){const u=uOf(i);if(u<=0||u>F.s)continue;const q=Math.min(1,(F.s-u)/Math.max(800,F.s)),k=.03+.06*Math.pow(1-q,1.5),jt=Math.max(.2,1+.5*Math.sin(u/650+S.t/800)+.25*Math.sin(u/210-S.t/430)),cap=.5*hwAt(u,F.s)+60;
-      if(!F.hL[i]&&F.exL[i]<cap&&!lobeBurntAt(AXIS[0]*u+LEFT[0]*(F.hwL[i]+25),AXIS[1]*u+LEFT[1]*(F.hwL[i]+25))){F.exL[i]+=R*k*bL*jt;F.hwL[i]+=R*k*bL*jt}
-      if(!F.hR[i]&&F.exR[i]<cap&&!lobeBurntAt(AXIS[0]*u-LEFT[0]*(F.hwR[i]+25),AXIS[1]*u-LEFT[1]*(F.hwR[i]+25))){F.exR[i]+=R*k*bR*jt;F.hwR[i]+=R*k*bR*jt}}}
+      if(!F.hL[i]&&F.exL[i]<cap&&!lobeBurntAt(AXIS[0]*u+LEFT[0]*(F.hwL[i]+25),AXIS[1]*u+LEFT[1]*(F.hwL[i]+25))){F.exL[i]+=R*k*bL*jt;F.hwL[i]+=R*k*bL*jt*lineSpread(i,1)}
+      if(!F.hR[i]&&F.exR[i]<cap&&!lobeBurntAt(AXIS[0]*u-LEFT[0]*(F.hwR[i]+25),AXIS[1]*u-LEFT[1]*(F.hwR[i]+25))){F.exR[i]+=R*k*bR*jt;F.hwR[i]+=R*k*bR*jt*lineSpread(i,-1)}}}
   if(F.wc&&F.rb&&!F.contained){const R=rosKmh(F.fuelHist[0]||'crop',WXV.post.wind)/3.6;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>F.wcS)continue;if(!F.hR[i]&&F.hwR[i]>0)F.hwR[i]+=R*.04*Math.max(.2,1+.5*Math.sin(u/650+S.t/800))}}
   // infill: gaps between the main body and fingers, spots and merged remnants close slowly, at a fraction of head speed
   {const rate=(F.rb||0)/3.6*.18,top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>top)continue;
@@ -425,7 +500,7 @@ function lobeStep(){
   if(S.t%10===0){for(const l of L){if(l.kind==='f'&&!l.held)lobeTargets(l)}for(const d of F.dead){if(d.grow)lobeTargets(d)}}
   for(const l of L){if(l.held)continue;if(l.brk){if((S.t+l.s|0)%30===0){const n=units.filter(u=>ACTIVE.includes(u.state)&&Math.hypot(u.x-l.brk.x,u.y-l.brk.y)<350).length;if(rand()<(F.gust?.45:.25)*(n>=2?.2:n===1?.5:1)){l.crossed=l.crossed||new Set();l.crossed.add(l.brk.id);const bx=l.brk.x+l.dx*120,by=l.brk.y+l.dy*120;l.brk=null;spawnSpot(true,[bx,by]);logE('Embers carry a spot fire over the road (facilitator view).','fac')}}continue}
     if(l.t0===undefined)l.t0=S.t;
-    const inc=(F.wc&&l.kind==='f'?l.ros*.2:l.ros)*(l.kind==='s'?Math.min(1,.2+(S.t-l.t0)/240):1)/3.6*(inWood(l.ox+l.dx*l.s,l.oy+l.dy*l.s)?.3:1)*(S.t<(l.chk||0)?.15:1)*(lobeBurntAt(l.ox+l.dx*(l.s+25),l.oy+l.dy*(l.s+25),l)?.2:1)*(()=>{const n=defCount(l.ox+l.dx*l.s,l.oy+l.dy*l.s,500);if(n>0&&!l.defLog){l.defLog=1;logE(`${n} crew${n>1?'s':''} defending ahead of a ${l.kind==='s'?'spot fire':'finger'}. Spread slowed.`,'good')}return n?Math.max(.4,1-.12*n):1})();
+    const inc=(F.wc&&l.kind==='f'?l.ros*.2:l.ros)*(l.kind==='s'?Math.min(1,.2+(S.t-l.t0)/240):1)/3.6*(inWood(l.ox+l.dx*l.s,l.oy+l.dy*l.s)?.3:1)*(S.t<(l.chk||0)?.15:1)*(1-Math.min(.65,(l.headWork||0)*.15))*(lobeBurntAt(l.ox+l.dx*(l.s+25),l.oy+l.dy*(l.s+25),l)?.2:1)*(()=>{const n=defCount(l.ox+l.dx*l.s,l.oy+l.dy*l.s,500);if(n>0&&!l.defLog){l.defLog=1;logE(`${n} crew${n>1?'s':''} defending ahead of a ${l.kind==='s'?'spot fire':'finger'}. Spread slowed.`,'good')}return n?Math.max(.4,1-.12*n):1})();
     if(!F.wc&&inc>0){l.crossed=l.crossed||new Set();const h=breakCheck(l.ox+l.dx*l.s,l.oy+l.dy*l.s,l.ox+l.dx*(l.s+inc),l.oy+l.dy*(l.s+inc),l.crossed);if(h){l.s=Math.max(l.s,(h.x-l.ox)*l.dx+(h.y-l.oy)*l.dy-3);l.brk=h;logE(`${l.kind==='s'?'Spot fire':'Finger'} held at ${h.name} for now (facilitator view).`,'fac');continue}}
     l.s+=inc}
   for(const d of F.dead){if(!d.grow)continue;if(F.wc){d.grow=false;continue}d.s+=d.ros/3.6*(inWood(d.ox+d.dx*d.s,d.oy+d.dy*d.s)?.3:1);if((d.ox+d.dx*d.s)*AXIS[0]+(d.oy+d.dy*d.s)*AXIS[1]<=F.s)d.grow=false}
@@ -464,7 +539,9 @@ function inCplx(l){if(l.held||l.s<120)return false;const hx=l.ox+l.dx*l.s,hy=l.o
 function cplxOpen(){return F.lobes.filter(l=>inCplx(l)&&S.t>=(l.chk||0)).length}
 function defCount(x,y,r){let n=0;for(const u of units)if(u.state==='defend'&&u.water>u.res&&u.type!=='SUP'&&Math.hypot(u.x-x,u.y-y)<r)n++;return n}
 function crewStep(){
-  let headCrews=0;mainLoad();
+  decayLines();let headCrews=0;mainLoad();
+  // Count crews working each head this tick, as for the main head below.
+  for(const l of F.lobes)l.hc=0;
   for(const u of units){if(u.state!=='patrol')continue;
     if(u.crew<3){u.state='idle';continue}
     const e=edgeDist(u.x,u.y);u.eng=Math.max(0,(u.eng||0)-.5);
@@ -473,16 +550,17 @@ function crewStep(){
   for(const u of units){
     const st=u.state;if(!ACTIVE.includes(st))continue;
     if(u.crew<3){u.state='idle';logE(`${u.name} has too few crew to work lines.`,'warn');continue}
-    let e=edgeDist(u.x,u.y);if(u.target&&u.target.type==='lobe'&&!u.target.lobe.held){const le=edgeDistLobe(u.target.lobe,u.x,u.y);if(le.d<=300&&le.d<=e.d+150)e=le}u.engNear=e.d<=300;
+    let e=edgeDist(u.x,u.y);if(u.target&&u.target.type==='lobe'&&!u.target.lobe.held){const le=edgeDistLobe(u.target.lobe,u.x,u.y);if(le.d<=300&&le.d<=e.d+150)e=le}const task=u.target&&lineTask(u,u.target);u.engNear=!u.safetyHold&&e.d<=300&&(!task||Math.hypot(u.x-task.goal[0],u.y-task.goal[1])<=TACTICS.reach);
     const dHead=Math.hypot(u.x-AXIS[0]*F.s,u.y-AXIS[1]*F.s);
     let use=0;
-    if(st==='attack'||st==='head'){if(u.engNear)use=5}
+    if(st==='attack'||st==='head'){if(u.engNear&&(!task||(!task.held[task.i]&&((task.role==='knockdown'&&(task.data.knock[task.i]||0)<1)||(task.role==='blackout'&&(task.data.knock[task.i]||0)>=1)))))use=5}
     else if(st==='defend'){if(e.d<400)use=1.7;if(u.water>u.res)for(const l of F.lobes){if(l.held||l.s>=80)continue;if(lobePts(l).some(q=>Math.hypot(q[0]-u.x,q[1]-u.y)<250)){l.work+=1.5;if(l.work>=2.2*l.s+30){l.held=true;logE(`${u.name} defending: a small ${l.kind==='s'?'spot fire':'finger'} that landed on the position is put out.`,'good')}}}}
     else if(st==='indirect'){if(u.contact)use=5;else if(e.d<=80){resolveLine(u,e,dHead);if(u.state!=='indirect')continue}}
     use*=(u.useMul||1);if(u.direct)use=0;
     if(use){u.water-=use;u.eng++;if(u.water<=u.res&&st==='defend'){u.water=u.res;defJoin(u)}else if(u.water<=u.res){u.target=null;u.water=u.res;u.state='reserve';logE(`${u.name} at crew-protection reserve.`,'warn');if(!(S.autoRefill&&seekWater(u)))withdraw(u);continue}}
-    if((st==='attack'||st==='head')&&u.engNear){
+    if((st==='attack'||st==='head')&&u.engNear&&!u.safetyHold){
       const f=(u.tac==='parallel'?.6:1)*(u.eff||1);
+      if(lineWork(u,f))continue;
       if(e.lobe){const l=e.lobe;
         if(l.s<120){const rate=(kmFuelAt(l.ox,l.oy)==='crop'?1.5:2.67)*f;l.work+=rate;if(l.work>=2.2*l.s+30&&!l.held){l.held=true;logE(`${u.name} holds a ${l.kind==='s'?'spot fire':'finger'}.`,'good')}}
         else if(e.part==='h'){l.hc=(l.hc||0)+(u.eff||1)*(u.tac==='parallel'?.6:1);u.lobeHead=l;if(inCplx(l)&&u.tac!=='parallel'&&(u.direct||u.water>u.res*1.5))headCrews+=(u.eff||1)}
@@ -491,16 +569,10 @@ function crewStep(){
       else{const rate=(kmFuelAt(u.x,u.y)==='crop'?90:160)/60*f;u.reach=(u.reach||0)+rate;const arr=e.side>0?F.hL:F.hR;
         for(let i=Math.max(0,e.i-3);i<=Math.min(NS-1,e.i+Math.floor(u.reach/DS));i++){if(uOf(i)>F.s-120)break;arr[i]=1}}}
   }
-  if(S.t%60===0){
-    for(const l of F.lobes){if(l.held||l.s<120)continue;const n=l.hc||0;l.hc=0;if(n>0){let succ=0;const pc=(kmFuelAt(l.ox,l.oy)==='crop'?.22:.4)*(F.gust?.6:1)*(n>=2?1.4:1);for(let c=0;c<Math.ceil(n);c++)if(rand()<pc)succ++;l.prog=Math.min(12,(l.prog||0)+4*succ)}else l.prog=Math.max(0,(l.prog||0)-1);
-      if((l.prog||0)>=8&&S.t>=(l.chk||0)){l.chk=S.t+8*60;l.prog=0;logE(`Head of a ${l.kind==='s'?'spot fire':'finger'} checked by direct attack. Flanks still open.`,'good');lobeCheck(l)}}
-    F.hcN=headCrews;F.waitSp=cplxOpen();
-    if(headCrews>=3){const stub=F.fuel==='stubble'&&!F.gust;let succ=0;for(let c=0;c<headCrews;c++){const r=d6();if(stub?r===6:(r===6&&d6()===6))succ++}F.prog=Math.min(F.waitSp>0?7:10,F.prog+succ)}
-    else F.prog=Math.max(0,F.prog-1);
-    if(F.waitSp>0&&F.prog>=7&&!F.waitLog){F.waitLog=true;logE(`Main head is close to checked, but ${F.waitSp} spot fire${F.waitSp>1?'s':''} or finger${F.waitSp>1?'s':''} ahead of it ${F.waitSp>1?'are':'is'} still running. They are part of the head. Check them too.`,'warn')}
-    if(F.waitSp===0)F.waitLog=false;
-    if(F.prog>=8&&S.t>=F.checkedUntil){F.checkedUntil=S.t+8*60;F.prog=0;logE('Head checked by direct attack. Flanks are still open and the head will not stay checked.','good')}
-  }
+  for(const l of F.lobes){if(l.held||l.s<120)continue;const n=l.hc||0;l.headWork=headAttackSuitable(l)?n:0;
+    if(n>=TACTICS.minHead&&headAttackSuitable(l))l.prog=Math.min(8,(l.prog||0)+8*n/TACTICS.headWork);else l.prog=Math.max(0,(l.prog||0)-8/TACTICS.recover);
+    if(l.prog>=8&&S.t>=(l.chk||0)){l.chk=S.t+8*60;l.prog=0;logE('Coordinated attack checks a spot or finger head. Secure its flanks.','good');lobeCheck(l)}}
+  tacticalPressure(headCrews);
   if(S.t%60===0&&S.mayday>0){for(const u of units){if(!ACTIVE.includes(u.state)||!(u.engNear||u.contact))continue;
     const dHead=Math.hypot(u.x-AXIS[0]*F.s,u.y-AXIS[1]*F.s);
     let p=.004*(u.state==='defend'?.4:u.tac==='parallel'?.5:u.state==='indirect'?2:1);
@@ -522,7 +594,8 @@ function bandAt(){return 0}
 const NV={x0:-5000,y0:-15000,c:60,w:400,h:400,spd:null};
 function buildNav(){try{
   const mk=()=>{const c=document.createElement('canvas');c.width=NV.w;c.height=NV.h;const g=c.getContext('2d');g.imageSmoothingEnabled=false;return[c,g]};
-  const P=q=>[(q[0]-NV.x0)/NV.c,NV.h-(q[1]-NV.y0)/NV.c];
+  // Raster rows use the same increasing-y order as navCell and navRoute.
+  const P=q=>[(q[0]-NV.x0)/NV.c,(q[1]-NV.y0)/NV.c];
   const poly=(g,pl)=>{g.beginPath();pl.forEach((q,i)=>{const a=P(q);i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1])});g.closePath();g.fill()};
   const line=(g,pl)=>{g.beginPath();pl.forEach((q,i)=>{const a=P(q);i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1])});g.stroke()};
   const inb=pl=>pl.some(q=>q[0]>NV.x0&&q[0]<NV.x0+NV.w*NV.c&&q[1]>NV.y0&&q[1]<NV.y0+NV.h*NV.c);
@@ -580,7 +653,7 @@ function moveUnits(){
     if(u.state==='setup'){u.setupT--;if(u.setupT<=0){u.state='wpoint';logE(u.bf?`${u.name} is ready, drafting from ${(u.assign&&u.assign.name)||'its source'}. Tankers can fill.`:`${u.name} is ready as a water point (${Math.round(u.stock)} L).`,'good')}continue}
     if(u.state==='filling'){u.fillT--;if(u.fillT<=0){
         if(u.fillSrc.kind==='sup'){const need=u.cap-u.water;if(u.fillSrc.unit.stock<need){u.fillT=1;logE(`${u.fillSrc.unit.name} has too little left for a full fill.`,'warn');u.state='idle';continue}u.fillSrc.unit.stock-=need}
-        u.water=u.cap;u.state='idle';logE(`${u.name} full.`,'good');if(S.autoRefill&&u.resume){S.resumeQ.push([u.id,u.resume])}u.resume=null;if(u.fillSrc.kind==='hyd'){const mm=u.fillSrc.s.main||u.fillSrc.s;mm.draws++;if(mm.draws===6)logE('Main pressure is dropping with every fill.','warn')}}
+        u.water=u.cap;u.refillLine=null;u.reliefId=null;u.state='idle';logE(`${u.name} full.`,'good');if(S.autoRefill&&u.resume){S.resumeQ.push([u.id,u.resume])}u.resume=null;if(u.fillSrc.kind==='hyd'){const mm=u.fillSrc.s.main||u.fillSrc.s;mm.draws++;if(mm.draws===6)logE('Main pressure is dropping with every fill.','warn')}}
       continue}
     if(!u.path||u.state==='offline'||u.state==='mayday'||u.state==='burnover')continue;
     if(!u.path.length){arrive(u);continue}
@@ -600,7 +673,7 @@ const NG=new Map();(function(){const R=200;for(let i=0;i<NX.length;i++){const k=
 function nearestNodeFast(x,y){const R=200,cx=Math.floor(x/R),cy=Math.floor(y/R);let b=-1,bd=1e18;for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){const l=NG.get((cx+dx)+','+(cy+dy));if(l)for(const i of l){const d=(NX[i]-x)**2+(NY[i]-y)**2;if(d<bd){bd=d;b=i}}}return b}
 function arrive(u){u.path=null;const t=u.tgt;u.tgt=null;
   if(t&&t.kind==='boost'){const s=t.src.s,m=mainOf(s);u.x=s.x;u.y=s.y;u.state='boost';u.boostMain=m;m.boost=(m.boost||0)+1;logE(`${u.name} boosting the ${mainName(m)} main at ${s.name}. Main now supports ${2+2*m.boost} direct-draw trucks.`,'good');dirty=1;renderUnits();return}
-  if(u.type!=='SUP'&&t&&t.px!=null&&(t.kind==='go'||t.kind==='attack'))snapSource(u,t.px,t.py);
+  if(u.type!=='SUP'&&t&&t.px!=null&&(t.kind==='go'||t.kind==='attack')){if(t.kind==='attack'&&u.target&&lineTask(u,u.target))snapSource(u,u.x,u.y);else snapSource(u,t.px,t.py)}
   if(t&&t.kind==='rehab'){const inR=units.filter(x=>x.state==='rehab').length,cap=rehabOn().length*REHAB_CAP;if(!rehabOn().length){u.state='idle';logE(`${u.name} at the staging area. No rehab unit set up.`,'warn')}else if(inR>=cap){u.state='idle';logE(`${u.name} at the staging area. Rehab is full, wait or send elsewhere.`,'warn')}else{u.state='rehab';u.rehabUntil=S.t+REHAB_MIN*60;logE(`${u.name} in rehab until about ${hhmm(u.rehabUntil)}.`,'good')}dirty=1;renderUnits();return}
   if(u.state==='retreat'){u.state='standdown';if(u.med){const here=S.amb&&S.t>=S.amb.at&&Math.hypot(u.x-rvPos()[0],u.y-rvPos()[1])<600;if(here){u.handed=true;logE(`${u.name}: crew member handed to paramedics at the staging area. Crew and truck stood down, DMO check still required.`,'good')}else logE(`${u.name} at the staging area. ${S.amb?'Ambulance not there yet.':'No ambulance requested.'}`,'warn');dirty=1;renderUnits();return}logE(`${u.name} at the retreat point. Offline${u.dmoChecked?', DMO checked':' pending DMO check'}.`,'warn');dirty=1;renderUnits();return}
   if(u.state==='reserve'||u.state==='withdraw'){if(u.state==='withdraw')u.state='idle';return}
@@ -638,7 +711,8 @@ function seekWater(u){u.resumeAuto=u.autoMul?1:u.resumeAuto;const from=nearestNo
   u.resume=u.lastOrder||null;issue(u,'fill',best.x,best.y,{src:best.src});logE(`${u.name} heading for the closest water, ${best.name}.`,'');return true}
 function issue(u,mode,wx,wy,extra){
   if(!S.comms){S.queued.push([u.id,mode,wx,wy,extra]);logE(`No comms. Order for ${u.name} is queued.`,'warn');return}
-  if(extra&&extra.auto){u.autoMul=1}else if(!(mode==='fill'||mode==='rehab'||mode==='boost')){u.autoMul=0}
+  u.safetyHold=false;u.workRole=null;u.reliefId=null;if(mode!=='fill')u.refillLine=null;
+  if(extra&&extra.auto){u.autoMul=1;u.autoManaged=true}else if(!(mode==='fill'||mode==='rehab'||mode==='boost')){u.autoMul=0;u.autoManaged=false}
   if(u.state==='boost'&&mode!=='boost')releaseBoost(u);
   if(u.state==='medical'||u.state==='burnover'||u.state==='retreat'){
     const drv=u.state==='medical'||(u.bo&&u.bo.drivable);
@@ -647,11 +721,16 @@ function issue(u,mode,wx,wy,extra){
     if(u.state==='medical')u.med=true;
     if(mode==='go'){if(!drv){logE(`${u.name}: truck is not drivable. Crew can only be recovered on foot.`,'fac');return}
       const from=nearestNode(u.x,u.y),dest=nearestNodeC(wx,wy,from),rt=route(from,dest);if(!rt){logE(`${u.name}: no route found.`,'warn');return}
-      u.path=rt.path;u.pi=0;u.state='retreat';u.tgt=null;if(u.state0==='medical'||u.hadMed)u.med=true;logE(`${u.name} moving to safety on your order.`,'warn');dirty=1;renderUnits();return}
+      u.path=rt.path;u.pi=0;u.state='retreat';u.tgt=null;if(u.state0==='medical'||u.hadMed)u.med=true;pingMove(u,wx,wy);logE(`${u.name} moving to safety on your order.`,'warn');dirty=1;renderUnits();return}
     logE(`${u.name} is in a burnover recovery. Only a retreat or move to safety is actioned. Order not given.`,'fac');return}
   if(u.state==='rehab'){logE(`${u.name} is in rehab until ${hhmm(u.rehabUntil)}. Order not given.`,'fac');return}
   if(mode==='rehab'){if(u.type==='SUP')return;rehabSend(u);return}
   if(['offline','mayday','standdown'].includes(u.state)){logE(`${u.name} is offline${u.rattled?' pending a DMO check':''}. Order not given.`,'fac');return}
+  if(u.type!=='SUP'&&['direct','parallel','indirect','defend','patrol'].includes(mode)&&(u.state==='filling'||(u.state==='moving'&&u.tgt&&u.tgt.kind==='fill')||u.water<=u.res)){
+    const next={mode,wx,wy,type:pickTarget(mode,wx,wy).type};u.lastOrder=next;u.resume=next;
+    logE(`${u.name}: tactical order saved for after its refill. Crew-protection water remains reserved.`,'');
+    if(u.state!=='filling'&&!(u.state==='moving'&&u.tgt&&u.tgt.kind==='fill')&&S.autoRefill)seekWater(u);
+    return}
   if(u.fcv){if(['direct','parallel','indirect','defend','patrol'].includes(mode)){mode='go';extra=null;logE(`${u.name} (command vehicle) moving to the team's area. It does not attack.`,'')}else if(['fill','boost','wp'].includes(mode)){logE(`${u.name} is a command vehicle. It has no water or pump. Move it with Move or the team order.`,'fac');return}}
   if(mode==='wp'){if(u.type!=='SUP'){logE(`${u.name} is a tanker. Water points are set up by Bigfill or UHT units.`,'fac');return}const fr=nearestNode(u.x,u.y),dn=nearestNodeC(wx,wy,fr),rt=route(fr,dn);if(!rt){logE(`${u.name}: no route found.`,'warn');return}u.path=rt.path;u.pi=0;u.state='moving';let asg=null,bd=150;SRC.concat(FPS).forEach(s=>{const d=Math.hypot(s.x-wx,s.y-wy);if(d<bd){bd=d;asg={kind:'hyd',s,name:s.name}}});DAMS.forEach(d=>{const dd=Math.hypot(d.x-wx,d.y-wy);if(d.known&&dd<bd){bd=dd;asg={kind:'dam',d,name:d.wp?'Water point '+d.wp:d.farmer?"Farmer's dam":'dam'}}});if(u.bf&&(!asg||asg.kind!=='dam')){u.path=null;u.state='idle';logE(`${u.name} is a pump only and carries no water. Send it to a dam or water point, not a hydrant or an open paddock.`,'fac');return}
   u.assign=asg;u.tgt={kind:'wp',assign:asg};logE(`${u.name} moving to set up a water point${asg?', assigned to '+asg.name:'. Not assigned to a water source, will work from its own stock'}.`,'');dirty=1;renderUnits();return}
@@ -661,14 +740,15 @@ function issue(u,mode,wx,wy,extra){
   if(mode==='defend'&&extra&&extra.exact){u.defClick=[wx,wy];u.defT=S.t;tx=wx;ty=wy;dest=nearestNodeC(tx,ty,from);u.slot=[tx,ty]}
   else if(mode==='defend'){let k=0;for(const o of units){if(o!==u&&o.defClick&&S.t-(o.defT||-999)<120&&Math.hypot(o.defClick[0]-wx,o.defClick[1]-wy)<30)k++}
    u.defClick=[wx,wy];u.defT=S.t;const sp=50+((u.id*37)%5)*10,off=(k%2?1:-1)*Math.ceil(k/2)*sp,dr=F.wc?AXIS:LEFT;tx=wx+dr[0]*off;ty=wy+dr[1]*off;dest=nearestNodeC(tx,ty,from);u.slot=[tx,ty];wx=tx;wy=ty}
-  if(isT){u.target=pickTarget(mode,wx,wy);const tg=u.target;u.lastOrder={mode,wx,wy,type:tg.type};rough=tg.type==='lobe'||tg.type==='flank';if(tg.type==='head'){const hp=headPoint();dest=nearestMain(hp[0]-AXIS[0]*120+j,hp[1]-AXIS[1]*120-j,from)}else if(tg.type==='lobe'){const l=tg.lobe,g=lobeGoal(l,u);dest=nearestNodeC(g[0],g[1],from)}else if(tg.area){const e=edgeDist(wx,wy);if(e.i>=0){const q=edgePt(e.i,e.side);dest=nearestNodeC(q[0]+j,q[1]-j,from)}}}
+  if(isT){u.target=pickTarget(mode,wx,wy);if(u.target.type==='head'&&!headAttackSuitable()){const e=edgeDist(wx,wy);u.target={type:'flank',side:e.side||((u.id%2)?1:-1)};logE(`${u.name}: head attack unsuitable. Extending the ${u.target.side>0?'NE':'SW'} flank from its anchor.`,'warn')}if(u.target.type==='flank'){const edge=edgeDist(wx,wy);u.target.side=u.target.side||edge.side||1;const task=lineTask(u,u.target);if(task)u.target.i=task.i;}const tg=u.target;u.lastOrder={mode,wx,wy,type:tg.type};rough=tg.type==='lobe'||tg.type==='flank';if(tg.type==='head'){const hp=headPoint();dest=nearestMain(hp[0]-AXIS[0]*120+j,hp[1]-AXIS[1]*120-j,from)}else if(tg.type==='lobe'){const l=tg.lobe,g=lobeGoal(l,u);dest=nearestNodeC(g[0],g[1],from)}else if(tg.area){const e=edgeDist(wx,wy);if(e.i>=0){const q=edgePt(e.i,e.side);dest=nearestNodeC(q[0]+j,q[1]-j,from)}}}
   if(mode==='stop'){withdraw(u);u.state='withdraw';u.warn=0;logE(`${u.name} withdrawing.`,'');return}
   if(mode==='fill'&&extra&&extra.src&&extra.src.kind==='sup'){dest=nearestNode(extra.src.unit.x,extra.src.unit.y)}
-  let goal=null;if(isT){const tg=u.target;if(tg.type==='head'){goal=headGoal(u)}else if(tg.type==='lobe'){goal=lobeGoal(tg.lobe,u)}else if(tg.area){const e=edgeDist(wx,wy);if(e.i>=0){const q=edgePt(e.i,e.side);goal=[q[0]+j,q[1]-j]}}else goal=[wx,wy]}else if(mode==='go')goal=[wx,wy];
+  let goal=null;if(isT){const tg=u.target;if(tg.type==='head'){goal=headGoal(u)}else if(tg.type==='lobe'){goal=lobeGoal(tg.lobe,u)}else if(tg.area){const e=edgeDist(wx,wy);if(e.i>=0){const q=edgePt(e.i,e.side);goal=[q[0]+j,q[1]-j]}}else goal=tg.type==='flank'?(flankGoal(tg,u)||[wx,wy]):[wx,wy]}else if(mode==='go')goal=[wx,wy];
   const oo=goal&&u.type!=='SUP'||(goal&&mode==='go')?offRoute(u,goal):null;
   const r=oo||route(from,dest,rough);if(!r){logE(`${u.name}: no route found.`,'warn');return}
   if(oo){u.psp=oo.psp;u.pspFor=oo.path}else{u.psp=null;u.pspFor=null}
   u.path=r.path;u.pi=0;u.warn=0;u.state='moving';u.reach=0;if(isT)u.tac=mode;u.contact=false;u.tgt={kind:isT?'attack':(mode==='go'?'go':mode),src:extra&&extra.src,px:wx,py:wy};
+  if(mode==='go')pingMove(u,wx,wy);
   logE(`${u.name} ordered to ${mode==='go'?'move':isT?mode+(mode==='defend'||mode==='patrol'?'':' attack'):mode==='boost'?'boost the main':'draw water'}.`,'');dirty=1;renderUnits()}
 function leadLobe(){if(F.wc)return null;let b=null,bu=F.s+150;for(const l of F.lobes){if(l.held||l.s<120)continue;const u=(l.ox+l.dx*l.s)*AXIS[0]+(l.oy+l.dy*l.s)*AXIS[1];if(u>bu){bu=u;b=l}}return b}
 /* Head = the furthest point forward along the wind direction (AXIS before the change, LEFT after) of the part of the perimeter that is not controlled. Control the furthest point and the head moves back to the next furthest uncontrolled point. Uncontrolled = unheld edge bins, unheld lobes (spots and fingers), and the main head tip unless it is checked or the fire is contained. Spots can only start from these. */
@@ -688,27 +768,72 @@ function uncontrolled(){if(UC&&UC.t===S.t&&UC.F===F)return UC;
 function realHead(){const U=uncontrolled();if(U.best)return[U.best.x,U.best.y];return headPoint()}
 function headPoint(){if(!F.wc)return[AXIS[0]*F.s,AXIS[1]*F.s];const u=F.wcS*.5,i=Math.floor(u/DS)+OFF;return[AXIS[0]*u+LEFT[0]*F.hwL[i],AXIS[1]*u+LEFT[1]*F.hwL[i]]}
 function pickTarget(mode,x,y){if(mode==='indirect'||mode==='defend'||mode==='patrol')return{type:'point'};
-  const hp=realHead();if(Math.hypot(x-hp[0],y-hp[1])<600)return{type:'head'};
+  const hp=realHead();if(Math.hypot(x-hp[0],y-hp[1])<600){const b=uncontrolled().best;return b&&b.lobe?{type:'lobe',lobe:b.lobe}:{type:'head'}};
   let bl=null,bd=400;for(const l of F.lobes){if(l.held)continue;for(const q of lobePts(l)){const d=Math.hypot(q[0]-x,q[1]-y);if(d<bd){bd=d;bl=l}}}
   if(bl)return{type:'lobe',lobe:bl};
   if(F.s>1&&edgeDist(x,y).d<400)return{type:'flank'};if(F.s>1&&edgeDist(x,y).d<1500)return{type:'flank',area:true};return{type:'point'}}
 function reroute(u,dest,rough){const r=route(nearestNode(u.x,u.y),dest,rough);if(!r)return false;u.path=r.path;u.pi=0;u.state='moving';u.tgt={kind:'attack'};u.reach=0;u.lastAuto=S.t;return true}
-function autoStep(){if(S.t%10!==0)return;
-  for(const u of units){const tg=u.target;if(!tg||!(u.tac==='direct'||u.tac==='parallel'))continue;if(!['moving','attack','head'].includes(u.state))continue;
-    if(S.t-(u.lastAuto||0)<20)continue;
-    if(tg.type==='head'){const hp=realHead(),d=Math.hypot(u.x-hp[0],u.y-hp[1]);
-      if(d<250){if(u.state==='attack'&&u.tac==='direct')u.state='head';continue}
-      if(u.state!=='moving'||!u.path||Math.hypot(u.path[u.path.length-1][0]-hp[0],u.path[u.path.length-1][1]-hp[1])>500){const j=(u.id%5)*14;{const hg=headGoal(u);reroute2(u,hg[0],hg[1],false)}}}
-    else if(tg.type==='lobe'){let l=tg.lobe;
-      if(l.held){let bd=3000,nx=null;for(const o of F.lobes){if(o.held||!o.reported)continue;const d=Math.hypot(o.ox-u.x,o.oy-u.y);if(d<bd){bd=d;nx=o}}
-        if(nx){tg.lobe=nx;logE(`${u.name} moves on to the next reported ${nx.kind==='s'?'spot':'finger'}.`,'');reroute2(u,nx.ox+nx.dx*nx.s*.5,nx.oy+nx.dy*nx.s*.5,true)}
-        else{u.target=null;u.state='idle';logE(`${u.name}: ${l.kind==='s'?'spot':'finger'} out. No other reported fires in reach. Awaiting orders.`,'good')}}
-      else if(u.state!=='moving'&&(edgeDistLobe(l,u.x,u.y).d>300||(l.s>=120&&S.t-(u.lgT||0)>90&&Math.hypot(lobeGoal(l,u)[0]-u.x,lobeGoal(l,u)[1]-u.y)>450))){u.lgT=S.t;const g=lobeGoal(l,u);reroute2(u,g[0],g[1],true)}}
-    else if(tg.type==='flank'&&u.state==='attack'){const e=edgeDist(u.x,u.y);if(e.side===0||e.d>300)continue;
-      const arr=e.side>0?F.hL:F.hR,top=F.wc?F.wcS:F.s;let all=true;for(let i=e.i;i<=Math.min(NS-1,e.i+8);i++){if(!arr[i]&&uOf(i)<top-250){all=false;break}}
-      if(!all)continue;let j=-1;for(let i=e.i+9;i<NS;i++){if(uOf(i)>=top-250)break;if(!arr[i]){j=i;break}}
-      if(j>0){const q=edgePt(j,e.side);if(reroute2(u,q[0],q[1],true))logE(`${u.name} advancing along the flank.`,'')}
-      else if(!u.doneLogged){u.doneLogged=true;logE(`${u.name} has held its flank up to the head. Awaiting orders.`,'good')}}}}
+// Coordination assumptions are listed in the Assumptions tab.
+const COORD={interval:10,replan:30,commit:90,contact:280,shift:160,search:3000,spacing:8,headNeed:3.2,spotCrews:3};
+const combatReady=u=>u.type!=='SUP'&&u.crew>=3&&u.water>u.res&&['idle','moving','attack','head','patrol'].includes(u.state);
+const assigned=u=>combatReady(u)&&u.target&&['moving','attack','head'].includes(u.state);
+function lobeLive(l){return l&&!l.held&&F.lobes.includes(l)}
+function flankGoal(tg,u){const task=u&&lineTask(u,tg);if(task)return task.goal;const p=linePlan(tg.side||1);return p.end>=p.anchor?linePoint(p,p.secure):null}
+function targetGoal(u){const tg=u.target;if(!tg)return null;if(tg.type==='lobe')return lobeLive(tg.lobe)?lobeGoal(tg.lobe,u):null;
+  if(tg.type==='head')return headGoal(u);if(tg.type==='flank')return flankGoal(tg,u);return null}
+function flankClaimed(u,i,side){return units.some(o=>o!==u&&assigned(o)&&o.target.type==='flank'&&o.target.side===side&&Math.abs(o.target.i-i)<COORD.spacing)}
+function chooseWork(u){
+  let best=null,score=Infinity;const offer=(tg,g,cost)=>{if(cost<score){score=cost;best={tg,g}}};
+  const distance=g=>Math.hypot(g[0]-u.x,g[1]-u.y);
+  // Reported small fires get a bounded crew allocation, with a preference for teammates.
+  for(const l of F.lobes){if(!lobeLive(l)||!l.reported)continue;
+    const peers=units.filter(o=>o!==u&&assigned(o)&&o.target.type==='lobe'&&o.target.lobe===l),cap=l.s<120?2:COORD.spotCrews;
+    if(peers.length>=cap)continue;const g=[l.ox+l.dx*l.s*.5,l.oy+l.dy*l.s*.5],d=distance(g);
+    if(d>COORD.search)continue;const buddy=u.team!=='-'&&peers.some(o=>o.team===u.team);
+    offer({type:'lobe',lobe:l},g,d-700+peers.length*200-(buddy?250:0))}
+  if(!F.contained){
+    const headLoad=units.filter(o=>o!==u&&assigned(o)&&o.target.type==='head').reduce((s,o)=>s+(o.effMul||1)*(o.autoMul?.8:1),0);
+    if(!(uncontrolled().best&&uncontrolled().best.lobe)&&headAttackSuitable()&&!F.wc&&!F.pinched&&S.t>=F.checkedUntil&&headLoad<COORD.headNeed&&u.water>u.res*1.5){
+      const g=headGoal(u);offer({type:'head'},g,distance(g)+350)}
+    for(const side of[1,-1]){const p=linePlan(side);if(p.secure>p.end||p.end<p.anchor||windUnsafe({type:'flank',side}))continue;
+      const peers=units.filter(o=>o!==u&&assigned(o)&&o.target.type==='flank'&&o.target.side===side);
+      const tg={type:'flank',side,i:p.front,lineRole:peers.length>=5?'relief':undefined},g=linePoint(p,Math.min(p.front,p.end));
+      const buddy=u.team!=='-'&&peers.some(o=>o.team===u.team);offer(tg,g,distance(g)+peers.length*200-(buddy?200:0))}}
+  return best}
+function taskAuto(u){if(!S.comms||S.autoHead===false||S.t<(u.retryAt||0))return false;
+  const job=chooseWork(u);u.retryAt=S.t+COORD.replan;if(!job)return false;
+  const previous=u.target;u.target=job.tg;job.g=targetGoal(u)||job.g;
+  // Set the ownership before computing roles so each crew reserves a distinct job.
+  if(!reroute2(u,job.g[0],job.g[1],job.tg.type!=='head')){u.target=previous;return false}
+  u.safetyHold=false;u.autoManaged=true;u.autoMul=1;u.tac='direct';u.taskAt=S.t;u.lastOrder={mode:'direct',wx:job.g[0],wy:job.g[1],type:job.tg.type};
+  const name=job.tg.type==='lobe'?(job.tg.lobe.kind==='s'?'reported spot fire':'reported finger'):job.tg.type==='head'?'main head':(job.tg.side>0?'NE':'SW')+' flank';
+  logE(`${u.name} taking an available position on the ${name}${u.team!=='-'?' with strike team '+u.team:''}.`,'');return true}
+function autoStep(){for(const u of units)if(combatReady(u)&&['direct','parallel'].includes(u.tac)&&windUnsafe(u.target))tacticalFallback(u);if(!S.comms)return;
+  // Stagger route searches across ticks rather than stopping the UI every ten seconds.
+  for(const u of units){if((S.t+u.id)%COORD.interval!==0||!combatReady(u))continue;
+    if(u.state==='moving'&&u.tgt&&u.tgt.kind!=='attack')continue;
+    let tg=u.target;
+    if(u.autoManaged&&(!tg||u.state==='idle'||u.state==='patrol')&&S.t-(u.taskAt||0)>=COORD.commit){taskAuto(u);continue}
+    if(!tg||!['direct','parallel'].includes(u.tac))continue;
+    if(tg.type==='lobe'&&!lobeLive(tg.lobe)){
+      u.target=null;u.path=null;u.state='idle';u.retryAt=0;
+      if(u.autoManaged)taskAuto(u);else{
+        const job=chooseWork(u);if(job&&Math.hypot(job.g[0]-u.x,job.g[1]-u.y)<=COORD.search){u.target=job.tg;reroute2(u,job.g[0],job.g[1],true)}
+        else logE(`${u.name}: assigned fire held or merged. Awaiting tasking.`,'good')}
+      continue}
+    if(tg.type==='point')continue;
+    if(tg.type==='head'&&!headAttackSuitable()&&!F.contained&&!F.pinched){const e=edgeDist(u.x,u.y);u.target=tg={type:'flank',side:e.side||1};u.lastAuto=0;}
+    if(tg.type==='flank'||tg.type==='lobe'){if(tacticalFallback(u))continue;u.safetyHold=false;if(rotateForWater(u))continue;const task=lineTask(u,tg);if(task){u.workRole=task.role;if(task.secure>task.end){if(u.autoManaged&&taskAuto(u))continue;u.path=null;u.state='patrol';continue}}}
+    if(tg.type==='head'&&(F.pinched||F.contained||S.t<F.checkedUntil||F.wc)&&u.autoManaged&&S.t-(u.taskAt||0)>=COORD.commit){u.retryAt=0;if(taskAuto(u))continue;u.target=null;u.path=null;u.state='patrol';logE(`${u.name} patrolling while the head is held.`,'good');continue}
+    const goal=targetGoal(u);if(!goal)continue;
+    const e=tg.type==='lobe'?edgeDistLobe(tg.lobe,u.x,u.y):edgeDist(u.x,u.y),d=Math.hypot(goal[0]-u.x,goal[1]-u.y),line=!!lineTask(u,tg),reach=line?TACTICS.reach:COORD.contact;
+    if(u.state==='moving'&&d<reach&&e.d<reach){u.tgt={kind:'attack'};arrive(u);continue}
+    if((u.state==='attack'||u.state==='head')&&e.d<reach&&d<(line?reach:COORD.shift*2))continue;
+    if(S.t-(u.lastAuto||0)<(line?COORD.interval:COORD.replan))continue;
+    if(u.state==='moving'&&u.path){const end=u.path[u.path.length-1];if(Math.hypot(end[0]-goal[0],end[1]-goal[1])<(line?DS:COORD.shift))continue}
+    reroute2(u,goal[0],goal[1],tg.type!=='head')
+  }}
+
 function defJoin(u){if(u.direct||S.t-(u.joinT||-999)<60)return;u.joinT=S.t;let best=null,bd=350;for(const h of SRC.concat(FPS)){const d=Math.hypot(h.x-u.x,h.y-u.y);if(d>=bd)continue;const m=mainOf(h);if(m.collapseUntil>S.t||(m.load||0)>=m.cap)continue;if(units.some(o=>o!==u&&((o.slot&&Math.hypot(o.slot[0]-h.x,o.slot[1]-h.y)<10)||(o.direct&&o.direct.s===h))))continue;bd=d;best=h}
   if(best){u.slot=[best.x,best.y];logE(`${u.name} at reserve on the line, moving onto ${best.name} to draw directly.`,'good')}}
 function defTrucks(){return[...S.sel].map(i=>units.find(u=>u.id===i)).filter(u=>u&&u.type!=='SUP')}
@@ -756,13 +881,75 @@ function fit(){const sx=W/10500,sy=H/10500;view={cx:2800,cy:-3000,k:Math.min(sx,
 const sx=x=>(x-view.cx)*view.k+W/2, sy=y=>-(y-view.cy)*view.k+H/2;
 const wx=px=>(px-W/2)/view.k+view.cx, wy=py=>-(py-H/2)/view.k+view.cy;
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// Visual feedback uses real time so it remains readable while paused or at 60x.
+let movePing=null;
+function pingMove(u,x,y){const now=performance.now();
+  if(movePing&&movePing.x===x&&movePing.y===y&&now-movePing.at<250){if(!movePing.ids.includes(u.id))movePing.ids.push(u.id);movePing.at=now}
+  else movePing={x,y,at:now,ids:[u.id],name:u.name};
+  dirty=1}
+function drawMovePing(){if(!movePing)return;const age=performance.now()-movePing.at;if(age>=1800){movePing=null;return}
+  const x=sx(movePing.x),y=sy(movePing.y),reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  ctx.save();ctx.globalAlpha=Math.min(1,(1800-age)/450);ctx.strokeStyle=col.info;ctx.fillStyle=col.info;
+  if(!reduced){const p=(age%700)/700;ctx.save();ctx.globalAlpha*=.65*(1-p);ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,12+24*p,0,Math.PI*2);ctx.stroke();ctx.restore()}
+  ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.strokeStyle=col.panel;ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle=col.info;ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
+  const label=movePing.ids.length>1?'Move · '+movePing.ids.length+' vehicles':movePing.name+' · Move';
+  ctx.font='600 12px '+css('--font-ui');ctx.textAlign='left';ctx.textBaseline='middle';
+  const width=ctx.measureText(label).width+16,lx=Math.max(4,Math.min(W-width-4,x+17)),ly=Math.max(14,Math.min(H-14,y-20));
+  ctx.fillStyle=col.panel;ctx.fillRect(lx,ly-12,width,24);ctx.strokeStyle=col.info;ctx.lineWidth=1;ctx.strokeRect(lx,ly-12,width,24);ctx.fillStyle=col.ink;ctx.fillText(label,lx+8,ly);
+  ctx.restore()}
+// Show the assigned edge while travelling, then the edge actually being worked.
+// These sections are display geometry only; they do not change crew tactics.
+function attackEdge(u){
+  const tg=u.target;if(u.type==='SUP'||!tg||!['direct','parallel'].includes(u.tac)||!['moving','attack','head'].includes(u.state))return null;
+  if(tg.type==='point'||(tg.type!=='lobe'&&F.contained))return null;
+  if(tg.type==='lobe'&&(tg.lobe.held||!F.lobes.includes(tg.lobe)))return null;
+  let p=[u.x,u.y];
+  if(u.state==='moving'){
+    if(tg.type==='head')p=realHead();
+    else if(tg.type==='lobe')p=lobeGoal(tg.lobe,u);
+    else if(u.lastOrder)p=[u.lastOrder.wx,u.lastOrder.wy];
+    // An advancing flank crew is travelling to its next working position.
+    if(tg.type==='flank')p=flankGoal(tg,u)||p;
+  }
+  let e=edgeDist(p[0],p[1]);
+  if(tg.type==='lobe'){const le=edgeDistLobe(tg.lobe,p[0],p[1]);if(u.state==='moving'||(le.d<=300&&le.d<=e.d+150))e=le}
+  if(u.state!=='moving'&&e.d>300)return null;
+  const lines=[];let line=[];
+  const put=(q,held)=>{const seen=!S.fog||units.some(o=>o.state!=='offline'&&Math.hypot(o.x-q[0],o.y-q[1])<1800);
+    if(held||!seen){line=[];return}if(!line.length)lines.push(line);line.push(q)};
+  if(e.lobe){const l=e.lobe,head=e.part==='h',s0=head?Math.max(0,l.s-240):Math.max(0,e.bin*40-160),s1=head?l.s:Math.min(l.s,e.bin*40+240);
+    for(const side of(head?[1,-1]:[e.side])){line=[];for(let s=s0;s<=s1;s+=20){const w=lobeW(l,s,side),h=side>0?l.hl:l.hr;
+      put([l.ox+l.dx*s-l.dy*w*side,l.oy+l.dy*s+l.dx*w*side],l.held||!!(h&&h[Math.floor(s/40)]))}}
+  }else if(e.i>=0){const head=tg.type==='head'&&!F.wc,top=F.wc?F.wcS:F.s,hi=Math.min(NS-1,Math.floor(top/DS)+OFF);
+    for(const side of(head?[1,-1]:[e.side])){line=[];const arr=side>0?F.hL:F.hR;
+      for(let i=Math.max(OFF,head?hi-6:e.i-4);i<=Math.min(hi,head?hi:e.i+6);i++)put(edgePt(i,side),!!arr[i]);
+      if(head)put([AXIS[0]*F.s,AXIS[1]*F.s],false)}}
+  const sections=lines.filter(l=>l.length>1);if(!sections.length)return null;
+  const middle=sections[0][Math.floor(sections[0].length/2)];
+  return{sections,anchor:middle,working:u.state!=='moving'}
+}
+function drawAttackEdges(){
+  for(const u of units){if(!S.sel.has(u.id))continue;const edge=attackEdge(u);if(!edge)continue;
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    for(const [width,alpha] of [[14,.2],[7,.95]]){ctx.strokeStyle=col.info;ctx.lineWidth=width;ctx.globalAlpha=alpha;
+      for(const section of edge.sections){strokePoly(section);ctx.stroke()}}
+    if(u.anchor){const ax=sx(u.anchor[0]),ay=sy(u.anchor[1]);ctx.globalAlpha=1;ctx.strokeStyle=col.info;ctx.lineWidth=2;ctx.strokeRect(ax-5,ay-5,10,10);if(S.sel.size===1){ctx.fillStyle=col.ink;ctx.font='600 11px '+css('--font-ui');ctx.textAlign='left';ctx.fillText('Anchor',ax+9,ay+4)}}
+    const x=sx(edge.anchor[0]),y=sy(edge.anchor[1]);ctx.globalAlpha=.65;ctx.strokeStyle=col.info;ctx.lineWidth=1.5;ctx.setLineDash([4,5]);
+    ctx.beginPath();const p=unitDrawPos(u);ctx.moveTo(sx(p[0]),sy(p[1]));ctx.lineTo(x,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+    if(S.sel.size===1){const label=(u.tac==='parallel'?'Parallel':'Direct')+' · '+(edge.working?'Attacking':'En route');
+      ctx.font='600 12px '+css('--font-ui');ctx.textAlign='left';ctx.textBaseline='middle';const width=ctx.measureText(label).width+16;
+      const lx=Math.max(4,Math.min(W-width-4,x+15)),ly=Math.max(14,Math.min(H-14,y-20));
+      ctx.fillStyle=col.panel;ctx.fillRect(lx,ly-12,width,24);ctx.strokeStyle=col.info;ctx.lineWidth=1;ctx.strokeRect(lx,ly-12,width,24);ctx.fillStyle=col.ink;ctx.fillText(label,lx+8,ly)}
+    ctx.restore()}
+}
 let col={};
 function pal(){['m-bg','m-road-a','m-road-b','m-road-c','m-road-d','m-track','m-res','m-water','m-creek','m-wood','m-pow','m-label','m-fire','m-burnt','m-fire-edge','m-head','m-held','ink','good','warn','bad','info','panel','accent'].forEach(n=>col[n]=css('--'+n))}
 function strokePoly(p,close){ctx.beginPath();p.forEach((q,i)=>i?ctx.lineTo(sx(q[0]),sy(q[1])):ctx.moveTo(sx(q[0]),sy(q[1])));if(close)ctx.closePath()}
 const vis=(p)=>{let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1]}return !(sx(x1)<0||sx(x0)>W||sy(y0)<0||sy(y1)>H)};
 const labels=[];(function(){const best={};MAP.roads.forEach(r=>{if(!r[1]||'abc'.indexOf(r[0])<0)return;const p=r[2];let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(!best[r[1]]||L>best[r[1]].L)best[r[1]]={L,p,n:r[1],c:r[0]}});
  Object.values(best).forEach(b=>{if(b.L<500)return;const m=b.p[Math.floor(b.p.length/2)],a=b.p[Math.max(0,Math.floor(b.p.length/2)-1)];labels.push({n:b.n,x:m[0],y:m[1],ang:Math.atan2(-(m[1]-a[1]),m[0]-a[0]),c:b.c})})})();
-function draw(){
+function drawTerrain(){
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle=col['m-bg'];ctx.fillRect(0,0,W,H);
   ctx.lineJoin='round';ctx.lineCap='round';
   MAP.res.forEach(p=>{if(!vis(p))return;strokePoly(p,1);ctx.fillStyle=col['m-res'];ctx.fill()});
@@ -774,6 +961,12 @@ function draw(){
   ['t','r','d','c','b','a'].forEach(k=>{ctx.strokeStyle=col[cl[k]];ctx.lineWidth=wd[k]*(k==='a'?Math.min(1.6,.6+view.k*14):1);if(k==='t'&&view.k<.04)return;if(k==='r'&&view.k<.04)return;
     MAP.roads.forEach(r=>{if(r[0]!==k||!vis(r[2]))return;strokePoly(r[2]);ctx.stroke()})});
   ctx.strokeStyle=col['m-pow'];ctx.setLineDash([8,5]);ctx.lineWidth=1.3;MAP.pow.forEach(p=>{strokePoly(p);ctx.stroke()});ctx.setLineDash([]);
+}
+let terrainCanvas=null,terrainKey='';
+function draw(){
+  const key=[cv.width,cv.height,view.cx,view.cy,view.k,...Object.values(col)].join('|');
+  if(!terrainCanvas||key!==terrainKey){drawTerrain();if(!terrainCanvas)terrainCanvas=document.createElement('canvas');terrainCanvas.width=cv.width;terrainCanvas.height=cv.height;terrainCanvas.getContext('2d').drawImage(cv,0,0);terrainKey=key}
+  else{ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(terrainCanvas,0,0);ctx.setTransform(dpr,0,0,dpr,0,0)}
   // dams
   DAMS.forEach((d,i)=>{const x=sx(d.x),y=sy(d.y);if(x<-20||y<-20||x>W+20||y>H+20)return;
     if(d.wp){const c=d.usable===null?col.info:d.usable?col.good:col.bad;ctx.fillStyle=col.panel;ctx.strokeStyle=c;ctx.lineWidth=d.g?3.5:2;if(d.usable===null)ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(x,y,view.k>.05?9:5,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);if(view.k>.05){ctx.fillStyle=c;ctx.font='700 10px '+css('--font-ui');ctx.textAlign='center';ctx.fillText('W',x,y+3.5);ctx.textAlign='left'}if(view.k>.12){ctx.fillStyle=col.ink;ctx.font='10px '+css('--font-ui');ctx.fillText('WP'+d.wp+(d.usable===false?' dry':d.g?' reliable':''),x+12,y+4)}return}
@@ -796,9 +989,10 @@ function draw(){
   ctx.fillStyle=col.accent;ctx.beginPath();ctx.arc(sx(0),sy(0),5,0,7);ctx.fill();ctx.fillStyle=col['m-label'];ctx.fillText('POI (Calder Hwy / Delaney Rd)',sx(0)+8,sy(0)+14);
   ctx.font='11px '+css('--font-ui');
   if(view.k>.035)labels.forEach(l=>{const x=sx(l.x),y=sy(l.y);if(x<0||y<0||x>W||y>H)return;ctx.save();ctx.translate(x,y);let a=l.ang;if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;ctx.rotate(-a*-1);ctx.rotate(0);ctx.fillStyle=col['m-label'];ctx.textAlign='center';ctx.fillText(l.n,0,-3);ctx.restore()});
-  drawUnits();drawAir();drawDefLine();drawDefPts();
+  drawAttackEdges();drawUnits();drawAir();drawDefLine();drawDefPts();
   // scale bar
   const m=view.k>.2?500:view.k>.06?1000:2000;ctx.strokeStyle=col['m-label'];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W-18-m*view.k,H-34);ctx.lineTo(W-18,H-34);ctx.stroke();ctx.fillStyle=col['m-label'];ctx.textAlign='right';ctx.fillText(m>=1000?m/1000+' km':m+' m',W-18,H-40);
+  drawMovePing();
 }
 function edgePt(i,side){const u=uOf(i),h=side>0?F.hwL[i]:F.hwR[i],n=side>0?LEFT:[-LEFT[0],-LEFT[1]];return[AXIS[0]*u+n[0]*h,AXIS[1]*u+n[1]*h]}
 function drawFire(){
@@ -826,17 +1020,24 @@ function drawFire(){
   ALLL.forEach(l=>{const nx=-l.dy,ny=l.dx;if(l.held){lobePath(ctx,l);ctx.strokeStyle=col['m-held'];ctx.lineWidth=3.5;ctx.stroke()}if(l.kind==='s'&&!l.held&&view.k<.2){ctx.fillStyle=col['m-fire-edge'];ctx.beginPath();ctx.arc(sx(l.ox+l.dx*l.s*.5),sy(l.oy+l.dy*l.s*.5),3,0,7);ctx.fill()}
     if(!l.held&&!l.dead){for(const sg of[1,-1]){const h=sg>0?l.hl:l.hr;if(!h)continue;ctx.strokeStyle=col['m-held'];ctx.lineWidth=4.5;ctx.beginPath();let on=false;for(let u=0;u<=l.s;u+=20){if(h[Math.floor(u/40)]){const w=lobeW(l,u,sg),X=l.ox+l.dx*u+nx*w*sg,Y=l.oy+l.dy*u+ny*w*sg;on?ctx.lineTo(sx(X),sy(Y)):ctx.moveTo(sx(X),sy(Y));on=true}else on=false}ctx.stroke()}
       if(S.t<(l.chk||0)||l.brk){ctx.strokeStyle=col['m-held'];ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(sx(l.ox+l.dx*l.s),sy(l.oy+l.dy*l.s),9,0,7);ctx.stroke()}}});
+  drawKnockdown();
   // held sections
   ctx.strokeStyle=col['m-held'];ctx.lineWidth=5.5;[1,-1].forEach(side=>{const arr=side>0?F.hL:F.hR;let on=false;ctx.beginPath();for(let i=0;i<=maxi;i++){if(arr[i]){const p=edgePt(i,side);on?ctx.lineTo(sx(p[0]),sy(p[1])):ctx.moveTo(sx(p[0]),sy(p[1]));on=true}else on=false}ctx.stroke()});
   if(F.brk&&!F.wc){const x=sx(tip[0]),y=sy(tip[1]);ctx.strokeStyle=col.warn;ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,16,0,7);ctx.stroke();ctx.fillStyle=col.warn;ctx.font='700 11px '+css('--font-ui');ctx.fillText('Held at road',x+20,y+4)}
   if(S.t<F.checkedUntil&&!F.wc){const x=sx(tip[0]),y=sy(tip[1]);ctx.strokeStyle=col['m-held'];ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,16,0,7);ctx.stroke();ctx.fillStyle=col['m-held'];ctx.font='700 11px '+css('--font-ui');ctx.fillText('Head checked',x+20,y+4)}
   ctx.restore()}
+function drawKnockdown(){ctx.save();ctx.strokeStyle=col.warn;ctx.lineWidth=4;ctx.lineCap='round';
+  for(const l of[null,...F.lobes])for(const side of[1,-1]){const d=(l||F)[side>0?'lineL':'lineR'];if(!d)continue;const p=linePlan(side,l);
+    for(const key of Object.keys(d.knock)){const i=+key;if(p.held[i]||d.knock[i]<=0||i>p.end)continue;ctx.globalAlpha=.3+.7*d.knock[i];
+      const a=linePoint(p,i,0),b=linePoint(p,Math.min(p.end,i+1),0);ctx.beginPath();ctx.moveTo(sx(a[0]),sy(a[1]));ctx.lineTo(sx(b[0]),sy(b[1]));ctx.stroke()}}
+  ctx.restore()}
 function drawLastKnown(){if(F.lkS<1)return;const hi=Math.min(NS-1,Math.floor(F.lkS/DS)+OFF),L=[],R=[];for(let i=0;i<=hi;i++){if(F.lkL[i]>0||F.lkR[i]>0||uOf(i)<=0){const u=uOf(i);L.push([AXIS[0]*u+LEFT[0]*F.lkL[i],AXIS[1]*u+LEFT[1]*F.lkL[i]]);R.push([AXIS[0]*u-LEFT[0]*F.lkR[i],AXIS[1]*u-LEFT[1]*F.lkR[i]])}}
   if(L.length<2)return;const tip=[AXIS[0]*F.lkS,AXIS[1]*F.lkS],poly=L.concat([tip],R.reverse());ctx.save();ctx.beginPath();poly.forEach((p,i)=>i?ctx.lineTo(sx(p[0]),sy(p[1])):ctx.moveTo(sx(p[0]),sy(p[1])));ctx.closePath();ctx.fillStyle=col['m-burnt'];ctx.globalAlpha=.5;ctx.fill();ctx.globalAlpha=1;ctx.setLineDash([7,5]);ctx.strokeStyle=col['m-fire-edge'];ctx.lineWidth=2;ctx.stroke();ctx.restore();ctx.fillStyle=col['m-fire-edge'];ctx.font='600 10px '+css('--font-ui');ctx.fillText('Last known fire edge',sx(tip[0])+10,sy(tip[1])-8)}
 const teamCol=tm=>!tm||tm==='-'?null:`hsl(${((tm.charCodeAt(0)-65)*67)%360},75%,46%)`;
 let boxSel=null;
+function unitDrawPos(u){const f=S.running?Math.min(1,acc):1;return[u.prevX==null?u.x:u.prevX+(u.x-u.prevX)*f,u.prevY==null?u.y:u.prevY+(u.y-u.prevY)*f]}
 function drawUnits(){
-  units.forEach(u=>{const x=sx(u.x),y=sy(u.y),sel=S.sel.has(u.id);ctx.save();
+  units.forEach(u=>{const p=unitDrawPos(u),x=sx(p[0]),y=sy(p[1]),sel=S.sel.has(u.id);ctx.save();
     const st=u.state;const c=(st==='attack'||st==='head'||st==='burnover'||st==='retreat'||st==='standdown')?col.bad:st==='medical'?col.warn:st==='indirect'?col.info:st==='defend'?col.good:(st==='mayday'||st==='offline')?col.warn:st==='filling'?col.good:col.info;
     if(u.type==='SUP'){ctx.fillStyle=col.info;ctx.fillRect(x-7,y-7,14,14);if(u.state==='wpoint'){ctx.strokeStyle=col.good;ctx.lineWidth=3;ctx.strokeRect(x-12,y-12,24,24)}}else{ctx.fillStyle=col.panel;ctx.strokeStyle=c;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.stroke();
       const f=Math.max(0,(u.water-u.res)/(u.cap-u.res));ctx.strokeStyle=f<.01?col.bad:col.ink;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,13,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(.02,f));ctx.stroke()}
@@ -846,13 +1047,13 @@ function drawUnits(){
     {const tc=teamCol(u.team);if(tc){ctx.strokeStyle=tc;ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,16,0,7);ctx.stroke();ctx.fillStyle=tc;ctx.fillRect(x+8,y-21,15,15);ctx.fillStyle='#fff';ctx.font='700 12px '+css('--font-ui');ctx.textAlign='center';ctx.fillText(u.team,x+15.5,y-9)}}
     ctx.fillStyle=col.ink;ctx.font='600 11px '+css('--font-ui');ctx.textAlign='left';ctx.fillText(u.short||u.name,x+(teamCol(u.team)?22:16),y+4);ctx.restore()});
   if(boxSel){ctx.save();ctx.strokeStyle=col.info;ctx.fillStyle=col.info;ctx.globalAlpha=.12;ctx.fillRect(boxSel.x0,boxSel.y0,boxSel.x1-boxSel.x0,boxSel.y1-boxSel.y0);ctx.globalAlpha=1;ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.strokeRect(boxSel.x0,boxSel.y0,boxSel.x1-boxSel.x0,boxSel.y1-boxSel.y0);ctx.restore()}}
-function render(){if(dirty){draw();dirty=0}requestAnimationFrame(render)}
+function render(){if(dirty||movePing||S.running){draw();dirty=0}requestAnimationFrame(render)}
 
 /* ---------- UI ---------- */
 function quarter(u){if(u.fcv)return'Command vehicle';if(u.bf)return'Pump, no water carried';if(u.type==='SUP')return Math.round(u.stock)+' L';const r=(u.water-u.res)/(u.cap-u.res);if(u.water<=u.res+1)return'On reserve';if(r>.9)return'Full';if(r>.75)return'Just under full';if(r>.5)return'Over half';if(r>.4)return'Just under half';if(r>.25)return'Just over a quarter';if(r>.1)return'Under a quarter';return'Nearly dry'}
 const SL={boost:'Boosting main',rehab:'In rehab',medical:'MEDICAL: heat illness',burnover:'MAYDAY: burnover',retreat:'Retreating',standdown:'Stood down',setup:'Setting up',wpoint:'Water point',indirect:'Indirect line',defend:'Defending',patrol:'Patrolling',idle:'Idle',moving:'Moving',attack:'Attacking',head:'Head attack',reserve:'Reserve: withdraw',withdraw:'Withdrawing',filling:'Filling',offline:'Offline',mayday:'MAYDAY'};
 let uSig='';let TEAMS=['A','B','C','D','E','-'];function ensureTeam(k){if(!TEAMS.includes(k)){TEAMS.splice(TEAMS.length-1,0,k)}}
-function tacLabel(u){if(u.state==='boost')return'Boosting '+(u.boostMain?mainName(u.boostMain)+' main':'main');if(u.direct)return'Direct draw at '+u.direct.name+', flow x'+(u.eff||1).toFixed(1);if(u.state==='rehab')return'Rehab until '+hhmm(u.rehabUntil);if(u.state==='medical')return'Awaiting ambulance or retreat to staging area';if(u.med&&u.state==='standdown')return u.handed?'Handed to paramedics, offline':'At staging area, awaiting ambulance';if(u.state==='burnover'||u.state==='retreat'||u.state==='standdown')return u.dmoChecked?'DMO checked, offline':'Awaiting DMO check';if(u.state==='defend')return'Defend, committed';if(u.state==='indirect')return'Indirect line';const tg=u.target;if(!tg||!u.tac||!['moving','attack','head'].includes(u.state))return'';const nm={direct:'Direct',parallel:'Parallel'}[u.tac];if(!nm)return'';return nm+' to '+({head:'head',lobe:'finger or spot',flank:'flank',point:'point'}[tg.type])}
+function tacLabel(u){if(u.safetyHold)return'Wind-change fallback';if(u.state==='boost')return'Boosting '+(u.boostMain?mainName(u.boostMain)+' main':'main');if(u.direct)return'Direct draw at '+u.direct.name+', flow x'+(u.eff||1).toFixed(1);if(u.state==='rehab')return'Rehab until '+hhmm(u.rehabUntil);if(u.state==='medical')return'Awaiting ambulance or retreat to staging area';if(u.med&&u.state==='standdown')return u.handed?'Handed to paramedics, offline':'At staging area, awaiting ambulance';if(u.state==='burnover'||u.state==='retreat'||u.state==='standdown')return u.dmoChecked?'DMO checked, offline':'Awaiting DMO check';if(u.state==='defend')return'Defend, committed';if(u.state==='indirect')return'Indirect line';const tg=u.target;if(!tg||!u.tac||!['moving','attack','head'].includes(u.state))return'';const nm={direct:'Direct',parallel:'Parallel'}[u.tac];if(!nm)return'';return (u.autoManaged?'Auto: ':nm+' to ')+(u.workRole?u.workRole+' · ':'')+({head:'head',lobe:'finger or spot',flank:tg.side>0?'NE flank':'SW flank',point:'point'}[tg.type])}
 function unitCard(u){const sup=u.type==='SUP'&&!u.fcv;return `<div class="unit${S.sel.has(u.id)?' sel':''}" data-id="${u.id}"><b>${u.name}</b><span class="st" data-f="st"></span><div class="meta"><span data-f="crew"></span>${sup||u.fcv?'':'<span class="bar"><i data-f="bar"></i></span>'}<span data-f="wat"></span><span data-f="tac" class="pill"></span>${sup?'':`<select data-team="${u.id}" aria-label="Strike team for ${u.name}">${TEAMS.map(x=>`<option ${x===u.team?'selected':''}>${x}</option>`).join('')}</select>`}${S.rfw?(u.ack?'<span class="tag s">RFW ack</span>':`<button data-ack="${u.id}">Acknowledge RFW</button>`):''}</div></div>`}
 function renderUnits(){
   const sig=[...S.coll].join()+'~'+units.map(u=>u.id+u.team+(S.sel.has(u.id)?'s':'')+(S.rfw?(u.ack?'a':'r'):'')).join('|')+'#'+S.pend.map(p=>p.o.name+p.at).join(',');
@@ -919,7 +1120,7 @@ $('bST').onclick=()=>{const hx=F.s>1?AXIS[0]*F.s:0,hy=F.s>1?AXIS[1]*F.s:0,dh=a=>
   const left=free.length-n;logE(`<b>Strike teams formed.</b> ${n} tanker${n===1?'':'s'} and ${f} command vehicle${f===1?'':'s'} assigned, nearest the head first, 5 tankers per team. ${joined?joined+' joined a team already working and took its order. ':''}${left?left+' tankers left unassigned.':''}${TEAMS.length-1>5?' More than 5 strike teams: a second sector is needed.':''}`,'');renderUnits();dirty=1};
 $('bAll').onclick=()=>{S.sel=new Set(units.map(u=>u.id));renderUnits();dirty=1};$('bClr').onclick=()=>{S.sel=new Set();renderUnits();dirty=1};
 function setMode(m){S.mode=m;if(m!=='defend'&&S.defPts&&S.defPts.length){S.defPts=[];}defUI();document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
- $('ordhint').textContent={patrol:'Patrol: click a point on or near the fire edge. Low intensity: crews recover while they work and knock down small spots. Use Rotate to swap tired crews in.',boost:'Boost: select tankers, then click a hydrant or fireplug. A booster pumps the main and lets more trucks draw directly (+2 per booster). Order the booster elsewhere to release it.',go:'Move: click anywhere. A selected Big Fill clicked near a known dam or water point sets up there instead. Roads and tracks are fast, paddocks slow, and crews go round houses, creeks and water. Click a unit with nothing else selected to select it.',direct:'Direct: work at the fire edge. Fastest hold, highest exposure. Three or more at the head can check it, but the odds are low in crop and spots ahead of the head must be checked too. Also takes on fingers and spots.',parallel:'Parallel: work from a short distance back from the edge. About 60% of the hold rate, about half the exposure.',indirect:'Indirect: click well ahead of the fire (200 m or more) on a road or track. Crew builds a break and waits. Water is only used when the fire arrives. Odds depend on fuel, gusts and how many tankers are there.',defend:'Defend: asset protection, hold the line. Select trucks, click points to draw a line (for example the west edge of Marong), then Deploy. The trucks spread evenly along it, and a slot within 90 m of a hydrant moves onto it so the truck draws directly (up to each main\'s limit). One click and Deploy puts them across the head path instead. Protects crew and property, no fire-edge work, low water use.',wp:'Water point: select a Bigfill or UHT unit, click a spot on a road. It takes 10 min to set up, then tankers can draw from it.',fill:'Draw water: click a dam, hydrant or supply unit. Dam dice: 1 = dry or inaccessible.',stop:'Withdraw: click anywhere to withdraw the selected units from their position.'}[m];
+ $('ordhint').textContent={patrol:'Patrol: click a point on or near the fire edge. Low intensity: crews recover while they work and knock down small spots. Use Rotate to swap tired crews in.',boost:'Boost: select tankers, then click a hydrant or fireplug. A booster pumps the main and lets more trucks draw directly (+2 per booster). Order the booster elsewhere to release it.',go:'Move: click anywhere. A selected Big Fill clicked near a known dam or water point sets up there instead. Roads and tracks are fast, paddocks slow, and crews go round houses, creeks and water. Click a unit with nothing else selected to select it.',direct:'Direct: extend a connected flank attack from the rear anchor. Crews share knockdown, blacking out and relief. Amber is knocked down; green is secured. Frontal attack needs a suitable road or aircraft opportunity and no gust. Right-click the map to clear selection.',parallel:'Parallel: work from a short distance back from the edge. About 60% of the work rate, about half the exposure. Shares the anchored knockdown and follow-up plan.',indirect:'Indirect: click well ahead of the fire (200 m or more) on a road or track. Crew builds a break and waits. Water is only used when the fire arrives. Odds depend on fuel, gusts and how many tankers are there.',defend:'Defend: asset protection, hold the line. Select trucks, click points to draw a line (for example the west edge of Marong), then Deploy. The trucks spread evenly along it, and a slot within 90 m of a hydrant moves onto it so the truck draws directly (up to each main\'s limit). One click and Deploy puts them across the head path instead. Protects crew and property, no fire-edge work, low water use.',wp:'Water point: select a Bigfill or UHT unit, click a spot on a road. It takes 10 min to set up, then tankers can draw from it.',fill:'Draw water: click a dam, hydrant or supply unit. Dam dice: 1 = dry or inaccessible.',stop:'Withdraw: click anywhere to withdraw the selected units from their position.'}[m];
  if(m==='rehab'){[...S.sel].forEach(i=>{const u=units.find(x=>x.id===i);if(u)issue(u,'rehab',u.x,u.y)});setMode('go');return}
  if(m==='stop'){[...S.sel].forEach(i=>{const u=units.find(x=>x.id===i);if(u)issue(u,'stop',u.x,u.y)});setMode('go')}}
 $('bDefGo').onclick=defDeploy;$('bDefUndo').onclick=()=>{S.defPts.pop();defUI();dirty=1};$('bDefX').onclick=defClear;
@@ -1002,7 +1203,7 @@ const ASSUME=[
 ['Tactics: direct = full hold rate and exposure; parallel = 60% hold, half exposure; indirect = break ahead, odds by fuel, gusts, tanker count; defensive = no edge work, 100 L/min, low exposure','A','Model. Indirect hold odds: 60% stubble, 25% crop, halved in gusts, scaled by tankers on the line'],
 ['Finger/spot hold work: perimeter (about 2.2 x length) divided by 1.5 m/s crop or 2.67 m/s stubble per crew','A','Derived from Simson Rd flank rates'],
 ['Ignition 14:16, 000 call 14:17, first page 14:18. Spot and finger reports arrive 30-120 s after a spot starts, 1-4 min after a finger','A','Scenario timeline; adjust to guide v9'],
-['Autonomy: direct or parallel orders aimed at the head re-route every 20 s to chase it; flank crews step forward when their section is held; spot crews move to the next reported fire; defend and indirect crews stay committed','A','Model'],
+['Crew coordination: untasked tankers share reported spots (2 crews under 120 m, otherwise 3) and anchored flank attacks. Teams use two knockdown, two follow-up and one relief role; additional crews stage as relief. Role decisions are staggered every 10 s. Ordinary route updates are no faster than 30 s after a 160 m shift; tactical line updates use 10 s and 40 m. Completed jobs are reviewed after 90 s, reported fires within 3 km. Manual positioning, defensive and indirect orders remain participant-controlled','A','Codex: simulation assumptions. Assignment distance costs: spot priority -700 m, existing allocation +200 m per crew, teammate preference -250 m for spots and -200 m for flanks; head approach +350 m. Doctrine concepts are separate from these tuning values'],
 ['Weather: 38 C, 14% RH, NW 40 km/h gusting 60 before the change; 31 C, 24% RH, SW 45 gusting 65 after. Editable in the Facilitator tab. Head ROS is the AFDRS grassland equation (natural pasture parameters for crop, grazed parameters for stubble), dead fuel moisture 9.58 - 0.205T + 0.138RH floored at 5%, fully cured','S','AFDRS Grassland Model Guide v2024.6.0; weather values are scenario assumptions'],
 ['Fingers and spotting odds scale with (wind/40)^2 x (5/MC)^0.5','A','Model'],
 ['Crews on reserve pick the quickest known source (hydrants, usable known dams, set-up water points) not within 500 m of the fire, fill, then return to task','A','Model'],
@@ -1021,7 +1222,7 @@ const ASSUME=[
 ['Draft set-up 8 min, fill under 4 min; hydrant 2 min + 4 min; full fills only','A','TK: set-up is the lag, fills are quick'],
 ['Big Fill and UHT units have no firefighting capacity, so any map click with one selected sets it up at the nearest known dam or water point within about 250 m of the click (a plain move if none, in Move mode). Fire-edge orders are not given to them','A','TK: setup here is the default'],
 ['Defence line slots within 90 m of a hydrant or fireplug snap onto it, up to each main\'s direct-draw limit (2 plus 2 per booster). Defenders hold at crew-protection reserve rather than leaving. Defend is asset protection for the last stand, not fire-edge work','A','TK: hold the line at all costs, hammer and tongs on a permanent source'],
-['Tankers that arrive with no tasking go straight to the head (direct attack, roads first, no driving through the fire to the 000 location) and work at x0.8 effectiveness for being autonomous. Any order you give removes the penalty. A Make Tankers unit tasked before it arrives is not affected','A','TK: untasked tankers go to the head; 0.8 for autonomy is TK figure'],
+['Untasked tankers share available head, flank and reported-spot work using the coordination assumptions above. They work at x0.8 effectiveness until participants give a tactical order; automatic refills preserve their assignment ownership','A','Codex: replaces the previous all-to-head behavior; existing x0.8 autonomy factor retained from TK'],
 ['A defender at crew-protection reserve moves onto a free hydrant within 350 m on the line (main below its limit) and draws directly, so low water stops mattering','A','TK: join a source plugged into the defence line'],
 ['Make Tankers 30, 50 and Uncle take time to arrange before units turn out (+5, +10 and +20 min on top of the normal 2 to 5 min turnout). 10, 15 and 20 have no extra delay. Escalate early: better to have the trucks and not need them','A','TK: 30 and above take time to arrange; the minutes are assumed'],
 ['Township status: impacted when the fire reaches the township edge, threatened when the head is within 3 km of the town centre or a live spot tip is within 1.5 km, otherwise clear. Success for the exercise is a township that is not impacted, per TK. Scorecard also lists first unit on scene, aircraft and Make Tankers call times, crews out and spots held','A','TK: win = not in the township; the 3 km and 1.5 km thresholds are assumed'],
@@ -1062,7 +1263,9 @@ const ASSUME=[
 ['Defending: each crew in defensive position with water, within 500 m either side of the head path and from 300 m behind to 1.5 km ahead of the head, cuts spread by 12% (minimum 40% of normal). Pre-change only. A defend order puts crews in a line across the head path, 50 to 90 m apart','A','TK: defended positions should visibly slow the head; factor assumed'],
 ['Fire shape: length to breadth is 1 + 3.85 x (1 - e^(-0.06 x wind)), about 4.5:1 at 40 km/h, from the Kariah, Harcourt and Skipton burns (Natimuk early was about 10:1, day-long fires about 2:1). The body is a teardrop, widest about 60% toward the head, narrow at the origin','A','TK images; ratio and profile estimated by eye from EMV maps'],
 ['Roads as breaks: the head and spot fires stop at sealed major roads (classes a and b, here the Calder Hwy). Every 30 s a roll decides whether embers carry across: 30% per roll, 50% in a gust, 25% for a spot, 45% in a gust. Two or more crews working within 350 m cut that to a fifth, one crew to half. A crossing starts a spot over the road','A','TK: Harcourt head held at the highway; probabilities assumed'],
-['Spot fires and fingers are contained like the main fire. The head is checked by direct attack (each crew has a 22% chance a minute in crop, 40% in stubble, halved again in a gust; two successes check it for 8 min, spread falls to 15%). Flanks are held at 90 m a minute (crop) or 160 m a minute (stubble) per crew, up to 120 m behind the head. The spot is contained when the head is checked and both flanks are 90% held. Spots under 120 m are knocked down by crews working them (as before). An indirect hold at the road gives a 15 min head check or a 640 m flank hold. A helitak drop on a spot over 200 m checks the head for 10 min','A','TK: spots should have edge and head containment like the main fire; rates adapted from the main-fire rules'],
+['Anchored tanker attack: work from the rear on the burnt side, extending knockdown and follow-up along a connected line. Fronts remain within four 40 m cells of secured line. Working reach 80 m, burnt-side offset 20 m, relief waits up to 80 m behind. Knockdown retains the previous 90/160 m/min crop/stubble rates; follow-up uses 2x that work rate. Unfinished knockdown has 180 s grace then recovers over 120 s; secured line stays held until an existing failure mechanism acts. Full knockdown cuts local lateral growth by 80%','A','Codex: numerical simulation assumptions, not CFA operating limits. Anchored flanking and follow-up concepts: CFA Guidelines for Operating Private Equipment at Fires, edition 2 June 2016, pp. 48-49, https://www.cfa.vic.gov.au/ArticleDocuments/550/2016_Private_Equipment_Guidelines_edn2_jun16.pdf.aspx'],
+['Head attack: only a non-gust road hold, existing check or head-drop window opens frontal attack in this model; an unsuitable frontal order becomes an anchored flank approach. Actual working crews contribute continuously: at least 2 effective crews, 900 crew-seconds for a check, progress recovers over 180 s without sufficient coverage, each working crew slows the head 15% up to 65%. Checks last 8 min and head-complex fires still block completion. Continuously secured flanks can pinch main and spot heads without a separate dice roll','A','Codex: illustrative eligibility and numerical assumptions, not a replacement for brigade size-up or SOPs'],
+['Refill relief: request handover at 35% of usable water, seek a teammate with over 65% within 600 m, and keep working until the replacement is on its working position. Only one planned refill per line at a time. Reserve still forces an immediate refill or withdrawal. Wind fallback: exposed NE crews move into mapped burnt refuge 120 s before the scheduled change and do not resume that exposed edge automatically while frontal attack is unsuitable','A','Codex: timing, water thresholds, distances and eligibility are simulation assumptions. CFA Brigade magazine Autumn 2025 lessons stress anchor points and escape planning, https://www.cfa.vic.gov.au/ArticleDocuments/556/Brigade-Magazine-Autumn-2025-web.pdf.aspx'],
 ['Lobes that join the main fire keep their burnt shape and never shrink back. The head does not jump when they join. After the wind change the NE flank runs as a row of fingers, some running at about 1.6 times the average and others at 0.3 times, 200 to 500 m apart, and the pockets between them fill in slowly (60% of the lateral fill rate). This copies the ragged shape of the Natimuk and Charlton fires after the change (TK images). Lakes and unburnt islands are not modelled. The gap between the main body and an attached finger, or a joined spot, fills from the flank at 18% of head speed (about 0.5 m/s at 10 km/h). A joined spot keeps running as its own head until the main head passes its tip. Spots are not started on ground that is already burnt','A','TK: no surge; gaps fill slowly, not as fast as the head. The 18% figure is assumed'],
 ['Second truck from each brigade departs 2 to 6 min after the first truck from that brigade','A','TK: natural delay for the second crew; roll 2 to 6 min'],
 ['Wind direction swing: wind direction fluctuates up to +/-30 degrees (two slow cycles of about 8 and 13 min). Spots and fingers launch at the swung angle and the main body drifts sideways, about 100 to 200 m. After the wind change, existing spots and fingers swing round to the new direction at about 0.5 degrees per second. Facilitator can set the swing (0 turns it off)','A','TK: show fluctuations of up to 30 degrees to spread the fire a little; lobes should follow the wind change'],
@@ -1078,7 +1281,7 @@ const ASSUME=[
 ['Water point discovery: only the 5 reliable water points start known. The Firebird (AAS) assesses one dam or water point behind the fire every 2 to 3 min and nominates it, which marks it known and usable (from the air it can see water)','A','TK: everything starts unknown except the reliable sources; chopper can rule sources in or out at about 1 every 2 to 3 min'],
 ['Aircraft dispatch only by State Air Desk request or PDD (000 Code 1 grass and scrub); a State Air Desk request is assumed to take 8 to 14 min to airborne, PDD 4 to 7 min','S','State PDD briefing (dispatch paths); delay times assumed'],
 ['Bendigo Airport at about 23 km from the fire origin: position from public coordinates','A','Projected from airport latitude and longitude'],
-['Drop effects: head drop adds 3 progress points and slows spread to 0.6x for 5 min; flank drop holds about 440 m for 7 min; spot drop knocks the fire down. Drops are held while crews are within 80 m, with a 40 s siren warning. Crews within 60 m at release are flagged unsafe','A','Effect sizes and distances assumed; safety behaviour from CFA aircraft safety lessons (take cover, leave gear, wait for all-clear)'],
+['Drop effects: a head drop adds 4 progress points and slows spread to 0.2x for 4 min (0.5x in woodland). Flank drops knock down about 440 m provisionally for 7 min, then recover over the tactical decay period unless ground crews secure it. Spots under 120 m can be extinguished by a drop; larger spot heads are checked for 10 min. Drops are held while active crews are within 80 m, with a 40 s warning; crews within 60 m at release are flagged unsafe','A','Existing aircraft effect assumptions, updated by Codex to distinguish aerial knockdown from ground-secured line; not operational limits'],
 ['Refill from the nearest non-dry dam of 300 m2 or more, or a water point; no fuel or crew-duty limits modelled; availability is a facilitator setting','A','Simplification'],
 ['Wind change: crews on unburnt ground within head ROS x 2 min (150 to 400 m) of the NE flank, or within 50 m of any other edge, get a 2 min burnover cue; crews in the black are safe; moving out in time avoids the roll','A','TK: crews must be clear of uncontrolled edges at the change; 2 min window, reach limits and 50 m assumed'],
 ['Road speeds: 70 / 60 / 50 / 40 / 25 km/h by class, calibrated to stated travel times','A','Model'],
@@ -1110,11 +1313,11 @@ function autoBF(){if(!S.autoBF||S.t%30!==0)return;
   for(const u of units){if(!(u.type==='SUP'&&u.bf)||u.state!=='idle'||u.assign||u.bfAuto)continue;
     let best=null,bd=1e18;const hp=headPoint();for(const d of DAMS){if(d.usable===false||!(d.known>=2||d.g))continue;if(d.air&&!d.wp)continue;const behind=(d.x-hp[0])*AXIS[0]+(d.y-hp[1])*AXIS[1]<-200;if(!behind&&!d.wp)continue;const dd=Math.hypot(d.x-FPC[0]*0-2500,d.y+2500-0)+Math.hypot(d.x-hp[0],d.y-hp[1])*.3;if(dd<bd){bd=dd;best=d}}
     if(best){u.bfAuto=1;issue(u,'wp',best.x,best.y);logE(`${u.name} sent to ${best.wp?'Water point '+best.wp:'a known dam'} to draft for the tankers (automatic until you task it).`,'good')}}}
-function tick(){NV.budget=4;autoBF();
+function tick(){for(const u of units){u.prevX=u.x;u.prevY=u.y}NV.budget=4;autoBF();
   S.t++;if(S.firstOn==null&&F.s>1&&S.t%10===0&&units.some(u=>u.type!=='SUP'&&u.state!=='wait'&&u.state!=='offline'&&edgeDist(u.x,u.y).d<1500)){S.firstOn=S.t;logE('<b>First unit on scene.</b> Within sight of the fire. Time to size up and decide on a Make Tankers call and aircraft.','good')}
 dmoCheck();ambCheck();
   for(let i=S.pend.length-1;i>=0;i--){if(S.pend[i].at<=S.t){const p=S.pend.splice(i,1)[0];spawn(p)}}
-  stepFire();lobeStep();airStep();autoStep();crewStep();moveUnits();for(const u of units){if(u.state==='defend'&&u.slot){const dx=u.slot[0]-u.x,dy=u.slot[1]-u.y,d=Math.hypot(dx,dy);if(d>3){const v=Math.min(d,4);u.x+=dx/d*v;u.y+=dy/d*v}}}while(S.resumeQ.length){const [id,o]=S.resumeQ.shift();const ru=units.find(x=>x.id===id);if(ru&&ru.state==='idle'){const hp=headPoint();const au=ru.resumeAuto;issue(ru,o.mode,o.type==='head'?hp[0]:o.wx,o.type==='head'?hp[1]:o.wy,au?{auto:true}:undefined);ru.resumeAuto=0;logE(`${ru.name} returning to task.`,'')}}
+  stepFire();lobeStep();airStep();autoStep();crewStep();moveUnits();for(const u of units){if(u.state==='defend'&&u.slot){const dx=u.slot[0]-u.x,dy=u.slot[1]-u.y,d=Math.hypot(dx,dy);if(d>3){const v=Math.min(d,4);u.x+=dx/d*v;u.y+=dy/d*v}}}while(S.resumeQ.length){const [id,o]=S.resumeQ.shift();const ru=units.find(x=>x.id===id);if(ru&&ru.state==='idle'){const hp=headPoint();const au=ru.resumeAuto;if(ru.autoManaged){ru.target=null;ru.retryAt=0;ru.taskAt=-COORD.commit;taskAuto(ru)}else issue(ru,o.mode,o.type==='head'?hp[0]:o.wx,o.type==='head'?hp[1]:o.wy,au?{auto:true}:undefined);ru.resumeAuto=0;logE(`${ru.name} returning to task.`,'')}}
   checkInj();
   if(S.t%5===0){renderUnits();}
   if(S.vp!==null&&S.t===S.vp)logE('VicPol on scene at the Calder.','good');
@@ -1137,7 +1340,7 @@ if(kind==='town'){let best=null,bd=1e18;const M=MARONG,cand=(k,x,y,ex)=>{const d
   const top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0)continue;if(u>top)break;for(const sd of [1,-1]){const h=sd>0?F.hwL[i]:F.hwR[i];if(h>0&&!(sd>0?F.hL[i]:F.hR[i])&&i%4===0){const q=edgePt(i,sd);cand('flank',q[0],q[1],{i,side:sd})}}}
   if(best)return best;kind='head'}
  if(kind==='flank'){const u=F.wc?F.wcS*.65:F.s*.7,i=Math.floor(u/DS)+OFF;if(i>=0&&i<NS&&F.hwL[i]>0){const p=edgePt(i,1);return{k:'flank',x:p[0],y:p[1],i}}kind='head'}
- const h=realHead();return{k:'head',x:h[0],y:h[1]}}
+ const h=realHead(),b=uncontrolled().best;return b&&b.lobe?{k:'spot',l:b.lobe,x:h[0],y:h[1]}:{k:'head',x:h[0],y:h[1]}}
 function airRear(d){const hp=realHead(),dir=F.wc?LEFT:AXIS;return (d.x-hp[0])*dir[0]+(d.y-hp[1])*dir[1]<=-300}
 function airOk(d){return d.usable!==false&&(d.air==='ok'||(d.wp&&d.g))}
 function airWater(){let best=null,bd=1e18;const hp=realHead();for(const d of DAMS){if(!airOk(d)||!airRear(d))continue;const dd=Math.hypot(d.x-hp[0],d.y-hp[1]);if(dd<bd){bd=dd;best=d}}return{d:bd<1e17?bd:6000,w:best}}
@@ -1151,13 +1354,13 @@ function airRecce(){const a=S.air,fb=a.fb;if(fb.st!=='scene'||S.t<(fb.nextRecce|
  }
 function airDrop(tg,o,nm,load){const a=S.air,ht=o||a.ht;nm=nm||'Helitak 335';load=load||AIR.load;ht.drops++;ht.L=(ht.L||0)+load;a.marks.push({x:tg.x,y:tg.y,t:S.t});if(tg.k!=='head')a.wet.push({x:tg.x,y:tg.y,t:S.t,k:tg.k});
  if(tg.k==='head'){F.prog=Math.min(10,F.prog+4);F.airSlow=S.t+240;F.airF=F.wood?.5:.2;a.wet.push({x:tg.x,y:tg.y,t:S.t,k:'h'});logE(`<b>${nm} drop ${ht.drops} on the head.</b> ${load} L. Spread cut to about a fifth for 4 min. Follow up with ground crews before it recovers.`,'good')}
- else if(tg.k==='flank'){let n=0;const arr=tg.side<0?F.hR:F.hL,hw=tg.side<0?F.hwR:F.hwL;for(let i=tg.i-5;i<=tg.i+5;i++){if(i>=0&&i<NS&&!arr[i]&&hw[i]>0){arr[i]=1;a.holds.push({i,until:S.t+420,arr});n++}}logE(`<b>${nm} drop ${ht.drops} on the NE flank.</b> ${load} L. About ${n*DS} m knocked down for about 7 min. Ground crews need to secure it.`,'good')}
- else{const l=tg.l;if(l.s<200){l.held=true;logE(`<b>${nm} drop ${ht.drops} on a ${l.kind==='s'?'spot fire':'finger'}.</b> Knocked down.`,'good')}else{l.chk=Math.max(l.chk||0,S.t+10*60);l.prog=0;logE(`<b>${nm} drop ${ht.drops} on a ${l.kind==='s'?'spot fire':'finger'}.</b> Head checked for about 10 min. Ground crews need to hold the flanks.`,'good')}}
+ else if(tg.k==='flank'){let n=0;const arr=tg.side<0?F.hR:F.hL,hw=tg.side<0?F.hwR:F.hwL;for(let i=tg.i-5;i<=tg.i+5;i++){if(i>=0&&i<NS&&!arr[i]&&hw[i]>0){const d=lineState(tg.side<0?-1:1);d.knock[i]=1;d.wet[i]=S.t+240;n++}}logE(`<b>${nm} drop ${ht.drops} on the NE flank.</b> ${load} L. About ${n*DS} m knocked down for about 7 min. Ground crews need to secure it.`,'good')}
+ else{const l=tg.l;if(l.s<120){l.held=true;logE(`<b>${nm} drop ${ht.drops} on a ${l.kind==='s'?'spot fire':'finger'}.</b> Knocked down.`,'good')}else{l.chk=Math.max(l.chk||0,S.t+10*60);l.prog=0;logE(`<b>${nm} drop ${ht.drops} on a ${l.kind==='s'?'spot fire':'finger'}.</b> Head checked for about 10 min. Ground crews need to hold the flanks.`,'good')}}
  for(const u of units){if(u.type==='SUP')continue;if(Math.hypot(u.x-tg.x,u.y-tg.y)<60&&ACTIVE.includes(u.state)){u.rattled=true;logE(`<b>Unsafe release:</b> ${u.name} was under the drop. Report it to the AAS.`,'bad')}}}
 function airStep(){
  if(!S.air){if(S.airMode==='pdd'&&units.length)airRequest(true);return}
  const a=S.air;if(!a.req){if(S.airMode==='pdd'&&units.length)airRequest(true);return}
- fwStep();airRecce();a.marks=a.marks.filter(m=>S.t-m.t<40);a.wet=a.wet.filter(m=>S.t-m.t<420);for(let k=a.holds.length-1;k>=0;k--){if(S.t>=a.holds[k].until){(a.holds[k].arr||F.hL)[a.holds[k].i]=0;a.holds.splice(k,1)}}
+ fwStep();airRecce();a.marks=a.marks.filter(m=>S.t-m.t<40);a.wet=a.wet.filter(m=>S.t-m.t<420);for(let k=a.holds.length-1;k>=0;k--){if(S.t>=a.holds[k].until){const h=a.holds[k],d=lineState((h.arr||F.hL)===F.hR?-1:1);if((d.mop[h.i]||0)<1)(h.arr||F.hL)[h.i]=0;a.holds.splice(k,1)}}
  if(a.ground){if(!a.gLog){a.gLog=true;logE('Aircraft are grounded (smoke or wind). No drops or aerial reports until they can fly.','warn')}return}a.gLog=false;
  const fb=a.fb,ht=a.ht,hp=headPoint();
  if(fb.st==='wait'&&S.t>=fb.go){fb.st='enroute'}
@@ -1234,7 +1437,7 @@ function updateWx(){const w=F.wc?WXV.post:WXV.pre,mc=Math.max(5,9.58-.205*w.T+.1
   const key=[S.t>>2,F.wc,F.gust,F.fuel,w.T,w.RH,w.wind,w.gust].join();if(key===wxKey)return;wxKey=key;
   $('wxTime').textContent=hhmm(S.t);$('wxArrow').style.transform='rotate('+w.to+'deg)';$('wxWind').textContent=w.dir+' '+w.wind+' km/h';
   const g=$('wxGust');g.textContent=F.gust?'Gusting '+w.gust+' km/h':'Gusts to '+w.gust+' km/h';g.className=F.gust?'g':'';
-  $('wxT').textContent=w.T+' '+String.fromCharCode(176)+'C';$('wxRH').textContent=w.RH+' %';$('wxMC').textContent=mc.toFixed(1)+' %';$('wxF').textContent=ros.toFixed(1)+' km/h';const fs=fireStats();$('wxA').textContent=(fs.ha<10?fs.ha.toFixed(1):Math.round(fs.ha).toLocaleString())+' ha';$('wxHd').textContent=(fs.held/1000).toFixed(1)+' / '+(fs.per/1000).toFixed(1)+' km';renderMeasures();{let n=0,h=0;const top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>top)continue;n++;if(F.hL[i])h++}$('wxNE').textContent=n?Math.round(100*h/n)+' %'+(!F.wc&&S.t>=C(15,20)?' (change due)':''):'0 %'}{const hn=F.hcN||0,ck=S.t<F.checkedUntil;$('wxHA').textContent=F.contained?'CONTAINED at '+hhmm(F.contained):((F.waitSp>0?F.waitSp+' spot head'+(F.waitSp>1?'s':'')+' ahead, ':'')+(F.defN?F.defN+' defending, ':''))+(ck?'CHECKED ('+Math.ceil((F.checkedUntil-S.t)/60)+' min left)':F.brk?'held at road, ':'running, ')+hn+'/3 crews, '+Math.min(100,Math.round((F.prog||0)/8*100))+' %';$('wxHA').style.color=F.contained?'#3a3':ck?'#3a3':hn>=3?'#c80':'#c33'}$('wxL').textContent=fs.act+' on, '+fs.hl+' out';{const tn=township();$('wxTn').textContent=tn.s==='impacted'?'IMPACTED':tn.s==='threatened'?'threatened ('+(tn.d/1000).toFixed(1)+' km)':'clear ('+(tn.d/1000).toFixed(1)+' km)';$('wxTn').style.color=tn.s==='impacted'?'#c33':tn.s==='threatened'?'#c80':'#3a3'}
+  $('wxT').textContent=w.T+' '+String.fromCharCode(176)+'C';$('wxRH').textContent=w.RH+' %';$('wxMC').textContent=mc.toFixed(1)+' %';$('wxF').textContent=ros.toFixed(1)+' km/h';const fs=fireStats();$('wxA').textContent=(fs.ha<10?fs.ha.toFixed(1):Math.round(fs.ha).toLocaleString())+' ha';$('wxHd').textContent=(fs.held/1000).toFixed(1)+' / '+(fs.per/1000).toFixed(1)+' km';renderMeasures();{let n=0,h=0;const top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>top)continue;n++;if(F.hL[i])h++}$('wxNE').textContent=n?Math.round(100*h/n)+' %'+(!F.wc&&S.t>=C(15,20)?' (change due)':''):'0 %'}{const hn=F.hcN||0,ck=S.t<F.checkedUntil;$('wxHA').textContent=F.contained?'CONTAINED at '+hhmm(F.contained):((F.waitSp>0?F.waitSp+' spot head'+(F.waitSp>1?'s':'')+' ahead, ':'')+(F.defN?F.defN+' defending, ':''))+(ck?'CHECKED ('+Math.ceil((F.checkedUntil-S.t)/60)+' min left)':F.brk?'held at road, ':'running, ')+hn.toFixed(1)+'/'+TACTICS.minHead+' effective crews, '+Math.min(100,Math.round((F.prog||0)/8*100))+' %';$('wxHA').style.color=F.contained?'#3a3':ck?'#3a3':hn>=3?'#c80':'#c33'}$('wxL').textContent=fs.act+' on, '+fs.hl+' out';{const tn=township();$('wxTn').textContent=tn.s==='impacted'?'IMPACTED':tn.s==='threatened'?'threatened ('+(tn.d/1000).toFixed(1)+' km)':'clear ('+(tn.d/1000).toFixed(1)+' km)';$('wxTn').style.color=tn.s==='impacted'?'#c33':tn.s==='threatened'?'#c80':'#3a3'}
   const n=$('wxNote');if(!F.wc&&S.t>=C(15,20)){n.textContent='SW change forecast about 15:34.';n.className='wx-n w'}else if(F.wc){n.textContent='SW change has passed.';n.className='wx-n w'}else{n.textContent='';n.className='wx-n'}}
 let last=0,acc=0;
 function loop(ts){if(!last)last=ts;let dt=(ts-last)/1000;last=ts;if(dt>.25)dt=.25;
@@ -1242,14 +1445,15 @@ function loop(ts){if(!last)last=ts;let dt=(ts-last)/1000;last=ts;if(dt>.25)dt=.2
   $('clock').textContent=hhmm(S.t,1);updateWx();const m=Math.floor(S.t/60),s=S.t%60;$('elapsed').textContent='T+'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+' since ignition  |  head '+(F.s/1000).toFixed(2)+' km';
   requestAnimationFrame(loop)}
 buildUrban();
-function reset(){TEAMS=['A','B','C','D','E','-'];S.coll=new Set();S.t=0;S.running=false;rand=rng(S.seed);S.log=[];$('log').innerHTML='';units=[];S.sel=new Set();S.pend=[];S.queued=[];S.reports=[];S.air=null;S.rvWarn=false;S.rv='marong';S.rvPt=null;S.defPts=[];S.placingRV=false;stagUI();S.resumeQ=[];S.mtCalled=false;S.waterPref=null;wSig='';S.rehab=[];S.heatN=0;$('bRH').disabled=false;$('bAIR').disabled=false;$('bAIR').textContent='Request Aircraft';$('bRH').textContent='Request Rehab';S.amb=null;$('bAMB').disabled=false;S.mtLevel=0;S.mtT=null;S.firstOn=null;S.airT=null;S.vp=null;S.uht=false;S.hitM=false;S.rfw=null;uid=0;newFire();DAMS.forEach(d=>{d.air=null;d.heliUntil=0;if(d.wp){d.known=d.g?3:0;d.usable=d.g?true:null}else{d.known=0;d.usable=null}d.farmer=false});MAINS.marong.draws=0;MAINS.gully.draws=0;[MAINS.marong,MAINS.gully].forEach(m=>{m.boost=0;m.collapseUntil=0;m.load=0;m.cap=2;m.warnT=-9999});S.hist=[];INJ.forEach(i=>i.done=false);['bMT','bVP','bUHT','bDMO','bAMB'].forEach(i=>$(i).disabled=false);S.dmoDue=null;$('mayday').hidden=true;$('wind').textContent='Wind NW 40 km/h';setRun();renderUnits();injList();logE('Scenario reset. Press Start. Fire ignites 14:10.','fac');dirty=1;mtLabel()}
+function reset(){movePing=null;TEAMS=['A','B','C','D','E','-'];S.coll=new Set();S.t=0;S.running=false;rand=rng(S.seed);S.log=[];$('log').innerHTML='';units=[];S.sel=new Set();S.pend=[];S.queued=[];S.reports=[];S.air=null;S.rvWarn=false;S.rv='marong';S.rvPt=null;S.defPts=[];S.placingRV=false;stagUI();S.resumeQ=[];S.mtCalled=false;S.waterPref=null;wSig='';S.rehab=[];S.heatN=0;$('bRH').disabled=false;$('bAIR').disabled=false;$('bAIR').textContent='Request Aircraft';$('bRH').textContent='Request Rehab';S.amb=null;$('bAMB').disabled=false;S.mtLevel=0;S.mtT=null;S.firstOn=null;S.airT=null;S.vp=null;S.uht=false;S.hitM=false;S.rfw=null;uid=0;newFire();DAMS.forEach(d=>{d.air=null;d.heliUntil=0;if(d.wp){d.known=d.g?3:0;d.usable=d.g?true:null}else{d.known=0;d.usable=null}d.farmer=false});Object.values(MAINS).forEach(m=>{m.draws=0;m.boost=0;m.collapseUntil=0;m.load=0;m.cap=2;m.warnT=-9999});S.hist=[];INJ.forEach(i=>i.done=false);['bMT','bVP','bUHT','bDMO','bAMB'].forEach(i=>$(i).disabled=false);S.dmoDue=null;$('mayday').hidden=true;$('wind').textContent='Wind NW 40 km/h';setRun();renderUnits();injList();logE('Scenario reset. Press Start. Fire ignites 14:10.','fac');dirty=1;mtLabel()}
 
 /* ---------- pointer ---------- */
 let drag=null;
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);const r=cv.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,cx:view.cx,cy:view.cy,moved:0,box:!!e.shiftKey,add:!!(e.ctrlKey||e.metaKey),px:e.clientX-r.left,py:e.clientY-r.top}});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();drag=null;boxSel=null;S.sel.clear();renderUnits();defUI();dirty=1});
+cv.addEventListener('pointerdown',e=>{if(e.button!==0)return;cv.setPointerCapture(e.pointerId);const r=cv.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,cx:view.cx,cy:view.cy,moved:0,box:!!e.shiftKey,add:!!(e.ctrlKey||e.metaKey),px:e.clientX-r.left,py:e.clientY-r.top}});
 cv.addEventListener('pointermove',e=>{if(!drag)return;if(drag.box){const r=cv.getBoundingClientRect(),qx=e.clientX-r.left,qy=e.clientY-r.top;if(Math.abs(qx-drag.px)+Math.abs(qy-drag.py)>4)drag.moved=1;boxSel={x0:Math.min(drag.px,qx),y0:Math.min(drag.py,qy),x1:Math.max(drag.px,qx),y1:Math.max(drag.py,qy)};dirty=1;return}const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4)drag.moved=1;if(drag.moved){view.cx=drag.cx-dx/view.k;view.cy=drag.cy+dy/view.k;dirty=1}});
-cv.addEventListener('pointerup',e=>{if(drag&&drag.box){const b=boxSel;boxSel=null;if(b&&drag.moved){const xa=wx(b.x0),xb=wx(b.x1),ya=wy(b.y1),yb=wy(b.y0),ids=units.filter(u=>!(u.type==='SUP'&&!u.fcv)&&u.x>=xa&&u.x<=xb&&u.y>=ya&&u.y<=yb).map(u=>u.id);S.sel=drag.add?new Set([...S.sel,...ids]):new Set(ids);logE(ids.length+' crew'+(ids.length===1?'':'s')+' selected by box.','fac');renderUnits()}drag=null;dirty=1;return}if(drag&&!drag.moved){const r=cv.getBoundingClientRect();onMapClick(wx(e.clientX-r.left),wy(e.clientY-r.top))}drag=null});
-cv.addEventListener('dblclick',e=>{const r=cv.getBoundingClientRect(),x=wx(e.clientX-r.left),y=wy(e.clientY-r.top),hit=units.find(u=>Math.hypot(u.x-x,u.y-y)<18/view.k);if(!hit||hit.team==='-')return;S.sel=new Set(units.filter(u=>u.team===hit.team).map(u=>u.id));renderUnits();dirty=1});
+cv.addEventListener('pointerup',e=>{if(e.button!==0)return;if(drag&&drag.box){const b=boxSel;boxSel=null;if(b&&drag.moved){const xa=wx(b.x0),xb=wx(b.x1),ya=wy(b.y1),yb=wy(b.y0),ids=units.filter(u=>!(u.type==='SUP'&&!u.fcv)&&u.x>=xa&&u.x<=xb&&u.y>=ya&&u.y<=yb).map(u=>u.id);S.sel=drag.add?new Set([...S.sel,...ids]):new Set(ids);logE(ids.length+' crew'+(ids.length===1?'':'s')+' selected by box.','fac');renderUnits()}drag=null;dirty=1;return}if(drag&&!drag.moved){const r=cv.getBoundingClientRect();onMapClick(wx(e.clientX-r.left),wy(e.clientY-r.top))}drag=null});
+cv.addEventListener('dblclick',e=>{if(e.button!==0)return;const r=cv.getBoundingClientRect(),x=wx(e.clientX-r.left),y=wy(e.clientY-r.top),hit=units.find(u=>Math.hypot(u.x-x,u.y-y)<18/view.k);if(!hit||hit.team==='-')return;S.sel=new Set(units.filter(u=>u.team===hit.team).map(u=>u.id));renderUnits();dirty=1});
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,x0=wx(px),y0=wy(py);view.k*=e.deltaY<0?1.2:1/1.2;view.k=Math.max(.01,Math.min(1.5,view.k));view.cx=x0-(px-W/2)/view.k;view.cy=y0+(py-H/2)/view.k;dirty=1},{passive:false});
 $('zi').onclick=()=>{view.k=Math.min(1.5,view.k*1.5);dirty=1};$('zo').onclick=()=>{view.k=Math.max(.01,view.k/1.5);dirty=1};$('zf').onclick=()=>{fit();dirty=1};
 addEventListener('resize',()=>{resize();dirty=1});

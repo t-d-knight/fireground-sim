@@ -1,11 +1,11 @@
 {
   "name": "operation-harvest-wind",
-  "version": "0.67.0",
+  "version": "0.68.0",
   "private": true,
   "description": "Operation Harvest Wind: whole-brigade grassfire tabletop exercise simulator (Marong CFA)",
   "scripts": {
     "build": "python3 tools/build.py",
-    "test": "node tests/smoke.js && node tests/head.js",
+    "test": "node tests/smoke.js && node tests/head.js && node tests/regressions.js",
     "bot": "node tests/bot.js",
     "relay:dev": "cd worker && npx wrangler dev"
   },
