@@ -166,12 +166,18 @@ const NMAIN=[];for(let i=0;i<NX.length;i++)NMAIN[i]=ADJ[i].some(e=>'abcd'.indexO
 const COMP=new Int32Array(NX.length).fill(-1);(function(){let k=0;for(let s=0;s<NX.length;s++){if(COMP[s]>=0)continue;const st=[s];COMP[s]=k;while(st.length){const u=st.pop();for(const e of ADJ[u]){if(COMP[e[0]]<0){COMP[e[0]]=k;st.push(e[0])}}}k++}})();
 function nearestNodeC(x,y,ref){let b=-1,bd=1e18;for(let i=0;i<NX.length;i++){if(ref>=0&&COMP[i]!==COMP[ref])continue;const d=(NX[i]-x)**2+(NY[i]-y)**2;if(d<bd){bd=d;b=i}}return b}
 function nearestMain(x,y,ref){let b=-1,bd=1e18;for(let i=0;i<NX.length;i++){if(!NMAIN[i]||(ref>=0&&COMP[i]!==COMP[ref]))continue;const d=(NX[i]-x)**2+(NY[i]-y)**2;if(d<bd){bd=d;b=i}}return b}
-function route(a,b,rough){if(!(a>=0)||!(b>=0))return null; // class-weighted dijkstra (main roads preferred unless rough); secs is true travel time
+const ROUTEC=new Map();let RT_VMAX=1;MAP.roads.forEach(r=>{RT_VMAX=Math.max(RT_VMAX,SPEED[r[0]]/3.6)});RT_VMAX=Math.max(RT_VMAX,5);const RT_DONE=new Int32Array(NX.length);let RT_GEN=0;
+function route(a,b,rough){if(!(a>=0)||!(b>=0))return null;const key=a+'|'+b+'|'+(rough?1:0);let c=ROUTEC.get(key);
+  if(c===undefined){c=routeRaw(a,b,rough);if(ROUTEC.size>4000)ROUTEC.clear();ROUTEC.set(key,c)}
+  return c?{path:c.path.map(q=>[q[0],q[1]]),secs:c.secs,metres:c.metres}:null}
+const RT_N=NX.length,RT_DIST=new Float64Array(RT_N),RT_TT=new Float64Array(RT_N),RT_PREV=new Int32Array(RT_N);
+function routeRaw(a,b,rough){ // class-weighted dijkstra (main roads preferred unless rough); secs is true travel time
   const PEN=rough?{a:1,b:1,c:1.1,d:1.2,t:1.6,r:1.8,w:1}:{a:1,b:1.1,c:1.3,d:1.8,t:5,r:3,w:1};
-  const n=NX.length,dist=new Float64Array(n).fill(1e18),tt=new Float64Array(n),prev=new Int32Array(n).fill(-1);dist[a]=0;const h=[[0,a]];
-  const push=e=>{h.push(e);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;[h[p],h[i]]=[h[i],h[p]];i=p}};
-  const pop=()=>{const t=h[0],l=h.pop();if(h.length){h[0]=l;let i=0;for(;;){let m=i,L=2*i+1,R=L+1;if(L<h.length&&h[L][0]<h[m][0])m=L;if(R<h.length&&h[R][0]<h[m][0])m=R;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m}}return t};
-  while(h.length){const [d,u]=pop();if(d>dist[u])continue;if(u===b)break;for(const [v,c,sp,cl] of ADJ[u]){const nd=d+c/sp*PEN[cl];if(nd<dist[v]){dist[v]=nd;prev[v]=u;tt[v]=tt[u]+c/sp;push([nd,v])}}}
+  const n=RT_N,dist=RT_DIST,tt=RT_TT,prev=RT_PREV;dist.fill(1e18);prev.fill(-1);dist[a]=0;tt[a]=0;const done=RT_DONE;const RT_G=++RT_GEN;
+  const bx=NX[b],by=NY[b];let hk=[0],hv=[a]; // parallel-array binary heap (A*: key = cost + straight-line lower bound)
+  const push=(k,v)=>{let i=hk.length;hk.push(k);hv.push(v);while(i>0){const p=(i-1)>>1;if(hk[p]<=k)break;hk[i]=hk[p];hv[i]=hv[p];i=p}hk[i]=k;hv[i]=v};
+  while(hk.length){const u=hv[0],lk=hk.pop(),lv=hv.pop();if(hk.length){let i=0;const L=hk.length;for(;;){let m=2*i+1;if(m>=L)break;if(m+1<L&&hk[m+1]<hk[m])m++;if(hk[m]>=lk)break;hk[i]=hk[m];hv[i]=hv[m];i=m}hk[i]=lk;hv[i]=lv}
+    if(done[u]===RT_G)continue;done[u]=RT_G;if(u===b)break;const d=dist[u];for(const e of ADJ[u]){const v=e[0],nd=d+e[1]/e[2]*PEN[e[3]];if(nd<dist[v]){dist[v]=nd;prev[v]=u;tt[v]=tt[u]+e[1]/e[2];push(nd+Math.hypot(NX[v]-bx,NY[v]-by)/RT_VMAX,v)}}}
   if(dist[b]>=1e17)return null;const path=[];let m=0;for(let u=b;u!==-1;u=prev[u]){path.push([NX[u],NY[u]])}path.reverse();for(let i=1;i<path.length;i++)m+=Math.hypot(path[i][0]-path[i-1][0],path[i][1]-path[i-1][1]);return{path,secs:tt[b],metres:m}}
 
 /* ---------- water sources ---------- */
@@ -880,7 +886,7 @@ function resize(){const r=$('mapwrap').getBoundingClientRect();dpr=window.device
 function fit(){const sx=W/10500,sy=H/10500;view={cx:2800,cy:-3000,k:Math.min(sx,sy)}}
 const sx=x=>(x-view.cx)*view.k+W/2, sy=y=>-(y-view.cy)*view.k+H/2;
 const wx=px=>(px-W/2)/view.k+view.cx, wy=py=>-(py-H/2)/view.k+view.cy;
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const CSSC=new Map();const css=n=>{let v=CSSC.get(n);if(v===undefined){v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();CSSC.set(n,v)}return v};
 // Visual feedback uses real time so it remains readable while paused or at 60x.
 let movePing=null;
 function pingMove(u,x,y){const now=performance.now();
@@ -944,7 +950,7 @@ function drawAttackEdges(){
     ctx.restore()}
 }
 let col={};
-function pal(){['m-bg','m-road-a','m-road-b','m-road-c','m-road-d','m-track','m-res','m-water','m-creek','m-wood','m-pow','m-label','m-fire','m-burnt','m-fire-edge','m-head','m-held','ink','good','warn','bad','info','panel','accent'].forEach(n=>col[n]=css('--'+n))}
+function pal(){CSSC.clear();['m-bg','m-road-a','m-road-b','m-road-c','m-road-d','m-track','m-res','m-water','m-creek','m-wood','m-pow','m-label','m-fire','m-burnt','m-fire-edge','m-head','m-held','ink','good','warn','bad','info','panel','accent'].forEach(n=>col[n]=css('--'+n))}
 function strokePoly(p,close){ctx.beginPath();p.forEach((q,i)=>i?ctx.lineTo(sx(q[0]),sy(q[1])):ctx.moveTo(sx(q[0]),sy(q[1])));if(close)ctx.closePath()}
 const vis=(p)=>{let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1]}return !(sx(x1)<0||sx(x0)>W||sy(y0)<0||sy(y1)>H)};
 const labels=[];(function(){const best={};MAP.roads.forEach(r=>{if(!r[1]||'abc'.indexOf(r[0])<0)return;const p=r[2];let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(!best[r[1]]||L>best[r[1]].L)best[r[1]]={L,p,n:r[1],c:r[0]}});
@@ -1047,7 +1053,7 @@ function drawUnits(){
     {const tc=teamCol(u.team);if(tc){ctx.strokeStyle=tc;ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,16,0,7);ctx.stroke();ctx.fillStyle=tc;ctx.fillRect(x+8,y-21,15,15);ctx.fillStyle='#fff';ctx.font='700 12px '+css('--font-ui');ctx.textAlign='center';ctx.fillText(u.team,x+15.5,y-9)}}
     ctx.fillStyle=col.ink;ctx.font='600 11px '+css('--font-ui');ctx.textAlign='left';ctx.fillText(u.short||u.name,x+(teamCol(u.team)?22:16),y+4);ctx.restore()});
   if(boxSel){ctx.save();ctx.strokeStyle=col.info;ctx.fillStyle=col.info;ctx.globalAlpha=.12;ctx.fillRect(boxSel.x0,boxSel.y0,boxSel.x1-boxSel.x0,boxSel.y1-boxSel.y0);ctx.globalAlpha=1;ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.strokeRect(boxSel.x0,boxSel.y0,boxSel.x1-boxSel.x0,boxSel.y1-boxSel.y0);ctx.restore()}}
-function render(){if(dirty||movePing||S.running){draw();dirty=0}requestAnimationFrame(render)}
+let lastR=0;function render(ts){if((dirty||movePing||S.running)&&!document.hidden&&(dirty||ts-lastR>=33)){lastR=ts||0;draw();dirty=0}requestAnimationFrame(render)}
 
 /* ---------- UI ---------- */
 function quarter(u){if(u.fcv)return'Command vehicle';if(u.bf)return'Pump, no water carried';if(u.type==='SUP')return Math.round(u.stock)+' L';const r=(u.water-u.res)/(u.cap-u.res);if(u.water<=u.res+1)return'On reserve';if(r>.9)return'Full';if(r>.75)return'Just under full';if(r>.5)return'Over half';if(r>.4)return'Just under half';if(r>.25)return'Just over a quarter';if(r>.1)return'Under a quarter';return'Nearly dry'}
@@ -1439,10 +1445,10 @@ function updateWx(){const w=F.wc?WXV.post:WXV.pre,mc=Math.max(5,9.58-.205*w.T+.1
   const g=$('wxGust');g.textContent=F.gust?'Gusting '+w.gust+' km/h':'Gusts to '+w.gust+' km/h';g.className=F.gust?'g':'';
   $('wxT').textContent=w.T+' '+String.fromCharCode(176)+'C';$('wxRH').textContent=w.RH+' %';$('wxMC').textContent=mc.toFixed(1)+' %';$('wxF').textContent=ros.toFixed(1)+' km/h';const fs=fireStats();$('wxA').textContent=(fs.ha<10?fs.ha.toFixed(1):Math.round(fs.ha).toLocaleString())+' ha';$('wxHd').textContent=(fs.held/1000).toFixed(1)+' / '+(fs.per/1000).toFixed(1)+' km';renderMeasures();{let n=0,h=0;const top=F.wc?F.wcS:F.s;for(let i=0;i<NS;i++){const u=uOf(i);if(u<0||u>top)continue;n++;if(F.hL[i])h++}$('wxNE').textContent=n?Math.round(100*h/n)+' %'+(!F.wc&&S.t>=C(15,20)?' (change due)':''):'0 %'}{const hn=F.hcN||0,ck=S.t<F.checkedUntil;$('wxHA').textContent=F.contained?'CONTAINED at '+hhmm(F.contained):((F.waitSp>0?F.waitSp+' spot head'+(F.waitSp>1?'s':'')+' ahead, ':'')+(F.defN?F.defN+' defending, ':''))+(ck?'CHECKED ('+Math.ceil((F.checkedUntil-S.t)/60)+' min left)':F.brk?'held at road, ':'running, ')+hn.toFixed(1)+'/'+TACTICS.minHead+' effective crews, '+Math.min(100,Math.round((F.prog||0)/8*100))+' %';$('wxHA').style.color=F.contained?'#3a3':ck?'#3a3':hn>=3?'#c80':'#c33'}$('wxL').textContent=fs.act+' on, '+fs.hl+' out';{const tn=township();$('wxTn').textContent=tn.s==='impacted'?'IMPACTED':tn.s==='threatened'?'threatened ('+(tn.d/1000).toFixed(1)+' km)':'clear ('+(tn.d/1000).toFixed(1)+' km)';$('wxTn').style.color=tn.s==='impacted'?'#c33':tn.s==='threatened'?'#c80':'#3a3'}
   const n=$('wxNote');if(!F.wc&&S.t>=C(15,20)){n.textContent='SW change forecast about 15:34.';n.className='wx-n w'}else if(F.wc){n.textContent='SW change has passed.';n.className='wx-n w'}else{n.textContent='';n.className='wx-n'}}
-let last=0,acc=0;
+let last=0,acc=0,HUDF=0,HUDT=-1;
 function loop(ts){if(!last)last=ts;let dt=(ts-last)/1000;last=ts;if(dt>.25)dt=.25;
   if(S.running){acc+=dt*S.speed;let n=0;while(acc>=1&&n<120){try{tick()}catch(err){if(!window.__tickErr||window.__tickErr!==String(err)){window.__tickErr=String(err);console.error('tick',err);try{logE('<b>Sim error caught: '+String(err).replace(/</g,'')+'</b> Sim continues. Send TK the console text.','fac')}catch(e2){}}}acc-=1;n++}if(n>=120)acc=0}
-  $('clock').textContent=hhmm(S.t,1);updateWx();const m=Math.floor(S.t/60),s=S.t%60;$('elapsed').textContent='T+'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+' since ignition  |  head '+(F.s/1000).toFixed(2)+' km';
+  HUDF++;if(HUDF%10===0||HUDT!==S.t){HUDT=S.t;$('clock').textContent=hhmm(S.t,1);updateWx();const m=Math.floor(S.t/60),s=S.t%60;$('elapsed').textContent='T+'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+' since ignition  |  head '+(F.s/1000).toFixed(2)+' km'}
   requestAnimationFrame(loop)}
 buildUrban();
 function reset(){movePing=null;TEAMS=['A','B','C','D','E','-'];S.coll=new Set();S.t=0;S.running=false;rand=rng(S.seed);S.log=[];$('log').innerHTML='';units=[];S.sel=new Set();S.pend=[];S.queued=[];S.reports=[];S.air=null;S.rvWarn=false;S.rv='marong';S.rvPt=null;S.defPts=[];S.placingRV=false;stagUI();S.resumeQ=[];S.mtCalled=false;S.waterPref=null;wSig='';S.rehab=[];S.heatN=0;$('bRH').disabled=false;$('bAIR').disabled=false;$('bAIR').textContent='Request Aircraft';$('bRH').textContent='Request Rehab';S.amb=null;$('bAMB').disabled=false;S.mtLevel=0;S.mtT=null;S.firstOn=null;S.airT=null;S.vp=null;S.uht=false;S.hitM=false;S.rfw=null;uid=0;newFire();DAMS.forEach(d=>{d.air=null;d.heliUntil=0;if(d.wp){d.known=d.g?3:0;d.usable=d.g?true:null}else{d.known=0;d.usable=null}d.farmer=false});Object.values(MAINS).forEach(m=>{m.draws=0;m.boost=0;m.collapseUntil=0;m.load=0;m.cap=2;m.warnT=-9999});S.hist=[];INJ.forEach(i=>i.done=false);['bMT','bVP','bUHT','bDMO','bAMB'].forEach(i=>$(i).disabled=false);S.dmoDue=null;$('mayday').hidden=true;$('wind').textContent='Wind NW 40 km/h';setRun();renderUnits();injList();logE('Scenario reset. Press Start. Fire ignites 14:10.','fac');dirty=1;mtLabel()}
@@ -1460,7 +1466,7 @@ addEventListener('resize',()=>{resize();dirty=1});
 new MutationObserver(()=>{pal();dirty=1}).observe(document.documentElement,{attributes:true});
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{pal();dirty=1});
 $('bHeat').onclick=()=>{let u=[...S.sel].map(i=>units.find(x=>x.id===i)).find(x=>x&&x.type!=='SUP'&&['moving','attack','head','indirect','defend','filling','idle'].includes(x.state))||units.find(x=>x.type!=='SUP'&&ACTIVE.includes(x.state));if(!u){logE('No crew in the field to take ill.','fac');return}heatIll(u)};
-window.__sim={measures,realHead,leadLobe,defDeploy,NX,NY,navRoute,NV,offRoute,burntAt,WXV,rosKmh,waterSources,seekWater,S,get F(){return F},get units(){return units},tick,reset,issue,nearestNode,route,DAMS,SRC,edgeDist,get graph(){return{n:NX.length}},setMode,onMapClick,view:()=>view};
+window.__sim={draw,measures,realHead,leadLobe,defDeploy,NX,NY,navRoute,NV,offRoute,burntAt,WXV,rosKmh,waterSources,seekWater,S,get F(){return F},get units(){return units},tick,reset,issue,nearestNode,route,DAMS,SRC,edgeDist,get graph(){return{n:NX.length}},setMode,onMapClick,view:()=>view};
 resize();pal();fit();reset();requestAnimationFrame(render);requestAnimationFrame(loop);
 })();
 </script>

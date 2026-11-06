@@ -70,3 +70,6 @@ No other pushes had landed on `main` or any other branch when I fetched (remote 
 
 ## Log: ROADMAP.md added
 - Fetched origin/main (3b23c62) before pushing; no upstream changes since PR #1. Added `ROADMAP.md` (docs only, no code touched). Please keep it updated rather than starting a parallel plan file.
+
+## Log: performance pass (0.69)
+- Profiled seed 1234, 9000 s: `route()` (full Dijkstra) was ~half of tick time with 400-670 ms spikes late in the run; draw was 10-17 ms/frame and growing, with uncached `getComputedStyle` calls and per-frame DOM updates. Fixed in `src/index.template.html` (route/css/render/loop only; no tactics or fire logic touched). Fire trajectory identical before and after. Remaining: draw cost (terrain blit + per-label save/restore) and a ~130 ms occasional tick spike. Check `tests/perf.js` before and after any tactics change.

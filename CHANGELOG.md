@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.69
+- Performance: A* pathfinding with a reusable heap and a route cache (tick time about halved, long stalls cut from 400-670 ms to about 130 ms). Cached CSS lookups used in the draw loop, HUD text updates throttled, render capped at 30 fps and paused when the tab is hidden.
+- `tests/perf.js`: tick and draw timing in windows over a long run, with an optional CPU profile (`node tests/perf.js <seed> <seconds> cpu`).
+- Simulation results unchanged (same fire trajectory on seed 1234).
+
 ## 0.68
 - Fix vertically mirrored off-road navigation, inflated spot-head crew counts, nonlocal wind-change line protection, and Eaglehawk mains persisting across resets.
 - Add named move-destination pings, selected attack-edge highlights, anchor markers, tactical role labels and right-click deselection.
