@@ -256,6 +256,16 @@ const testHtml = html.replace('window.__sim={',
       return { held: u.safetyHold, working: u.state === 'attack', safeDestination: !end || w.burntAt(end[0],end[1]) };
     }, result => { assert.ok(result.held); assert.equal(result.working, false); assert.ok(result.safeDestination); });
 
+    await check('right-click deselects without issuing a movement order', () => {
+      const w = window.__sim, r = window.__test;
+      const u = r.mkUnit({ type: 'TK', name: 'crew', x: 1000, y: -1000 }); w.units.push(u); w.S.sel.add(u.id);
+      const cv = document.getElementById('cv');
+      cv.dispatchEvent(new PointerEvent('pointerdown', { button: 2, clientX: 400, clientY: 300, bubbles: true }));
+      cv.dispatchEvent(new MouseEvent('contextmenu', { button: 2, clientX: 400, clientY: 300, bubbles: true, cancelable: true }));
+      cv.dispatchEvent(new PointerEvent('pointerup', { button: 2, clientX: 400, clientY: 300, bubbles: true }));
+      return { selected: w.S.sel.size, state: u.state, path: u.path, orders: w.S.log.filter(e => /ordered to/.test(e.msg)).length };
+    }, result => assert.deepEqual(result, { selected: 0, state: 'idle', path: null, orders: 0 }));
+
     await check('new tactical orders wait for a refill without interrupting it', () => {
       const w = window.__sim, r = window.__test;
       w.F.s = 3000; w.F.hwL.fill(300); w.F.hwR.fill(300);
