@@ -1,7 +1,7 @@
 // The head is the furthest uncontrolled point forward along the wind, and moves back as it is controlled.
 const { chromium } = require('playwright'); const path = require('path');
 (async () => {
-  const b = await chromium.launch(); const p = await b.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const b = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }); const p = await b.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + path.resolve(__dirname, '..', 'dist', 'index.html')); await p.waitForTimeout(800);
   const r = await p.evaluate(() => { const w = window.__sim; w.S.seed = 7; w.reset(); w.S.running = true; for (let t = 0; t < 1800; t++) w.tick();
     const F = w.F, A = [.7071, -.7071], fw = h => Math.round(h[0] * A[0] + h[1] * A[1]);

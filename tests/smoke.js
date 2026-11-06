@@ -4,7 +4,7 @@ const path = require('path');
 const URL = 'file://' + path.resolve(__dirname, '..', 'dist', 'index.html');
 const fail = (m) => { console.error('FAIL', m); process.exitCode = 1; };
 (async () => {
-  const b = await chromium.launch(); const p = await b.newPage(); const errs = [];
+  const b = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }); const p = await b.newPage(); const errs = [];
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(URL); await p.waitForTimeout(1000);
   const run = (seed) => p.evaluate((seed) => { const w = window.__sim; w.S.seed = seed; w.reset(); w.S.running = true;

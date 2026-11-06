@@ -280,7 +280,7 @@ function windChange(){if(F.wc)return;F.wc=true;F.wcS=F.s;F.wcAt=S.t;
   let sum=0,n=0;for(let i=0;i<NS;i++){if(uOf(i)>=0&&uOf(i)<=F.wcS){sum+=fm[i];n++}}const mean=n?sum/n:1;for(let i=0;i<NS;i++)fm[i]/=mean||1;F.fm=fm}
 $('wind').textContent='Wind SW (change passed)';
  for(let i=0;i<NS;i++){ // unattended held flank fails
-   if(F.hL[i]){const x=F.hwL[i];let att=false;for(const u of units){if(u.eng&&u.state==='attack'&&dist2Edge(u)<250){att=true;break}}if(!att){F.hL[i]=0}}
+   if(F.hL[i]){const q=edgePt(i,1);let att=false;for(const u of units){if(u.eng&&u.state==='attack'&&Math.hypot(u.x-q[0],u.y-q[1])<250){att=true;break}}if(!att){F.hL[i]=0}}
  }
  logE('Unattended held sections of the NE flank have failed.','bad');
  for(const l of F.lobes){if(l.held)continue;F.dead.push({ox:l.ox,oy:l.oy,dx:l.dx,dy:l.dy,s:l.s,lb:l.lb,held:false,dead:true});
@@ -465,6 +465,7 @@ function cplxOpen(){return F.lobes.filter(l=>inCplx(l)&&S.t>=(l.chk||0)).length}
 function defCount(x,y,r){let n=0;for(const u of units)if(u.state==='defend'&&u.water>u.res&&u.type!=='SUP'&&Math.hypot(u.x-x,u.y-y)<r)n++;return n}
 function crewStep(){
   let headCrews=0;mainLoad();
+  for(const l of F.lobes)l.hc=0;
   for(const u of units){if(u.state!=='patrol')continue;
     if(u.crew<3){u.state='idle';continue}
     const e=edgeDist(u.x,u.y);u.eng=Math.max(0,(u.eng||0)-.5);
@@ -522,7 +523,7 @@ function bandAt(){return 0}
 const NV={x0:-5000,y0:-15000,c:60,w:400,h:400,spd:null};
 function buildNav(){try{
   const mk=()=>{const c=document.createElement('canvas');c.width=NV.w;c.height=NV.h;const g=c.getContext('2d');g.imageSmoothingEnabled=false;return[c,g]};
-  const P=q=>[(q[0]-NV.x0)/NV.c,NV.h-(q[1]-NV.y0)/NV.c];
+  const P=q=>[(q[0]-NV.x0)/NV.c,(q[1]-NV.y0)/NV.c];
   const poly=(g,pl)=>{g.beginPath();pl.forEach((q,i)=>{const a=P(q);i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1])});g.closePath();g.fill()};
   const line=(g,pl)=>{g.beginPath();pl.forEach((q,i)=>{const a=P(q);i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1])});g.stroke()};
   const inb=pl=>pl.some(q=>q[0]>NV.x0&&q[0]<NV.x0+NV.w*NV.c&&q[1]>NV.y0&&q[1]<NV.y0+NV.h*NV.c);
@@ -1242,7 +1243,7 @@ function loop(ts){if(!last)last=ts;let dt=(ts-last)/1000;last=ts;if(dt>.25)dt=.2
   $('clock').textContent=hhmm(S.t,1);updateWx();const m=Math.floor(S.t/60),s=S.t%60;$('elapsed').textContent='T+'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+' since ignition  |  head '+(F.s/1000).toFixed(2)+' km';
   requestAnimationFrame(loop)}
 buildUrban();
-function reset(){TEAMS=['A','B','C','D','E','-'];S.coll=new Set();S.t=0;S.running=false;rand=rng(S.seed);S.log=[];$('log').innerHTML='';units=[];S.sel=new Set();S.pend=[];S.queued=[];S.reports=[];S.air=null;S.rvWarn=false;S.rv='marong';S.rvPt=null;S.defPts=[];S.placingRV=false;stagUI();S.resumeQ=[];S.mtCalled=false;S.waterPref=null;wSig='';S.rehab=[];S.heatN=0;$('bRH').disabled=false;$('bAIR').disabled=false;$('bAIR').textContent='Request Aircraft';$('bRH').textContent='Request Rehab';S.amb=null;$('bAMB').disabled=false;S.mtLevel=0;S.mtT=null;S.firstOn=null;S.airT=null;S.vp=null;S.uht=false;S.hitM=false;S.rfw=null;uid=0;newFire();DAMS.forEach(d=>{d.air=null;d.heliUntil=0;if(d.wp){d.known=d.g?3:0;d.usable=d.g?true:null}else{d.known=0;d.usable=null}d.farmer=false});MAINS.marong.draws=0;MAINS.gully.draws=0;[MAINS.marong,MAINS.gully].forEach(m=>{m.boost=0;m.collapseUntil=0;m.load=0;m.cap=2;m.warnT=-9999});S.hist=[];INJ.forEach(i=>i.done=false);['bMT','bVP','bUHT','bDMO','bAMB'].forEach(i=>$(i).disabled=false);S.dmoDue=null;$('mayday').hidden=true;$('wind').textContent='Wind NW 40 km/h';setRun();renderUnits();injList();logE('Scenario reset. Press Start. Fire ignites 14:10.','fac');dirty=1;mtLabel()}
+function reset(){TEAMS=['A','B','C','D','E','-'];S.coll=new Set();S.t=0;S.running=false;rand=rng(S.seed);S.log=[];$('log').innerHTML='';units=[];S.sel=new Set();S.pend=[];S.queued=[];S.reports=[];S.air=null;S.rvWarn=false;S.rv='marong';S.rvPt=null;S.defPts=[];S.placingRV=false;stagUI();S.resumeQ=[];S.mtCalled=false;S.waterPref=null;wSig='';S.rehab=[];S.heatN=0;$('bRH').disabled=false;$('bAIR').disabled=false;$('bAIR').textContent='Request Aircraft';$('bRH').textContent='Request Rehab';S.amb=null;$('bAMB').disabled=false;S.mtLevel=0;S.mtT=null;S.firstOn=null;S.airT=null;S.vp=null;S.uht=false;S.hitM=false;S.rfw=null;uid=0;newFire();DAMS.forEach(d=>{d.air=null;d.heliUntil=0;if(d.wp){d.known=d.g?3:0;d.usable=d.g?true:null}else{d.known=0;d.usable=null}d.farmer=false});Object.values(MAINS).forEach(m=>{m.draws=0;m.boost=0;m.collapseUntil=0;m.load=0;m.cap=2;m.warnT=-9999});S.hist=[];INJ.forEach(i=>i.done=false);['bMT','bVP','bUHT','bDMO','bAMB'].forEach(i=>$(i).disabled=false);S.dmoDue=null;$('mayday').hidden=true;$('wind').textContent='Wind NW 40 km/h';setRun();renderUnits();injList();logE('Scenario reset. Press Start. Fire ignites 14:10.','fac');dirty=1;mtLabel()}
 
 /* ---------- pointer ---------- */
 let drag=null;
