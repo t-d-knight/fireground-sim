@@ -1,6 +1,6 @@
 const {chromium}=require('playwright');
 const seed=+process.argv[2]||1234, END=+process.argv[3]||7200;
-(async()=>{const b=await chromium.launch();const p=await b.newPage();const er=[];p.on('pageerror',e=>er.push(e.message));await p.goto(''+'file://'+require('path').resolve(__dirname,'..','dist','index.html')+'');await p.waitForTimeout(1200);
+(async()=>{const b=await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });const p=await b.newPage();const er=[];p.on('pageerror',e=>er.push(e.message));await p.goto(''+'file://'+require('path').resolve(__dirname,'..','dist','index.html')+'');await p.waitForTimeout(1200);
 const r=await p.evaluate(([seed,END])=>{const w=window.__sim;w.S.seed=seed;w.reset();w.S.running=true;const $=id=>document.getElementById(id);
  const rows=[];let done=false,sight=null;const WPS=[25,15,24,14];WPS.forEach(n=>{const d=w.DAMS.find(d=>d.wp===n);if(d){d.known=3;d.usable=true}});w.S.autoBF=false;let bfi=0;const A=[.7071,-.7071],L=[.7071,.7071];
  for(let t=0;t<END;t++){w.tick();const F=w.F,S=w.S;
@@ -21,4 +21,4 @@ const r=await p.evaluate(([seed,END])=>{const w=window.__sim;w.S.seed=seed;w.res
   if(t%300===0){const m=w.measures();const st={};w.units.forEach(u=>st[u.state]=(st[u.state]||0)+1);rows.push([t,Math.round(F.s),F.lobes.filter(l=>!l.held).length,Math.round(m.edge),F.pinched?'P':'-',F.contained?'C':'-',(F.urbLog?'URB':'ok'),Math.round(m.ha||F.area||0),JSON.stringify(st)].join(' '))}
   if(F.contained&&!done){done=true;rows.push('CONTAINED '+t)}
   if(done&&t>1e9)break}
- return `seed ${seed} sight ${sight}\n`+rows.join('\n')+'\nMT '+w.S.mtLevel+' hit '+w.S.hitM},[seed,END]);console.log(r.slice(0,3500));console.log(er);await b.close()})()
+ return `seed ${seed} sight ${sight}\n`+rows.join('\n')+'\nMT '+w.S.mtLevel+' hit '+w.S.hitM},[seed,END]);console.log(r.slice(0,3500));console.log(er);console.log('FINAL',JSON.stringify(await p.evaluate(()=>{const w=window.__sim,m=w.measures(),counts={};for(const u of w.units)if(u.type!=='SUP')counts[u.state]=(counts[u.state]||0)+1;return{seed:w.S.seed,seconds:w.S.t,ha:Math.round(m.ha),edge:Math.round(m.edge),counts,impacted:!!w.F.urbLog,contained:!!w.F.contained}})));await b.close()})()
