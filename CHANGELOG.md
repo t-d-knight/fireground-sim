@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.68
+- Fix vertically mirrored off-road navigation, inflated spot-head crew counts, nonlocal wind-change line protection, and Eaglehawk mains persisting across resets.
+- Add named move-destination pings, selected attack-edge highlights, anchor markers, tactical role labels and right-click deselection.
+- Coordinate anchored knockdown, follow-up blacking out and relief. Provisional amber line can recover; followed-up green line is secured. Secured flanks can pinch the head.
+- Replace minute head-attack dice with sustained eligible crew pressure. Frontal attack depends on a suitable road/check/drop window; unsuitable orders become anchored flank work.
+- Preserve coverage during planned refill handovers, queue tactical orders through refills, respect crew-protection reserve, and fall back from the exposed NE edge near the wind change.
+- Keep stable spot roles, retire merged targets, rejoin current work after refilling and patrol completed line. Retain the shared uncontrolled-head definition introduced in 0.67.
+- Treat aircraft flank drops as provisional knockdown requiring ground follow-up.
+- Interpolate truck animation and cache static terrain to reduce redraw work.
+- Expand regression coverage and print exact final metrics from scripted bot runs. Record numerical tactics as simulation assumptions with concept references.
+
 ## 0.67
 - Version badge (version, commit, UTC build time) in orange at the top left of the map.
 - Cloudflare deploy config (`wrangler.jsonc`) and `docs/DEPLOY-cloudflare.md` for the solo site.

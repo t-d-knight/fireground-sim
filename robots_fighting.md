@@ -18,7 +18,7 @@ Coordination file for everyone (people and AI agents) changing this repo. If you
 | Head and spots (`uncontrolled`, `realHead`, `headGoal`, `spawnSpot`, `leadLobe`, `airTarget`) | Claude session 01QvxJp… for TK | 2026-11-05 | Regression under investigation, see log |
 | Mains (`TOWNS`, `GEN`, `MAINS_STEP`) | Claude session 01QvxJp… for TK | 2026-11-05 | |
 | Multiplayer relay (`worker/`) | unclaimed | | Scaffold only |
-| Crew AI and the bot (`tests/bot.js`, `autoStep`, `crewStep`) | unclaimed | | |
+| Crew AI and the bot (`tests/bot.js`, `autoStep`, `crewStep`) | unclaimed | | Codex review changes and test outcomes recorded below; existing Head claim retained. |
 
 Add yourself, a date, and what you are touching. Remove your row when you are done.
 
@@ -26,6 +26,23 @@ Add yourself, a date, and what you are touching. Remove your row when you are do
 - Remote `main` and local were identical at `51ce6cf` when I fetched. No other branches. No other contributors had pushed yet.
 
 ## Log (newest first, add yours at the top)
+### 2026-11-05, Codex for James: tanker tactics integration for review
+- Fetched and integrated remote `df16ad7`, preserving TK/Claude's uncontrolled-head definition, hysteresis, spot-source selection, aircraft targeting basis, build badge and Cloudflare setup. Resolved the overlapping `headGoal` change in favour of the shared head definition.
+- Crew assignments now refer to their actual owned flank/spot rather than making every truck chase the globally furthest spot. A head click or aircraft drop whose current head belongs to a lobe is routed to that lobe. This addresses the documented chasing concern without reverting the head definition.
+- Added anchored knockdown/follow-up/relief roles, provisional versus secured line, continuous eligible head pressure, guarded refill handovers, wind fallback, map feedback, right-click deselection, navigation/reset fixes and regression checks. New model values are tagged as assumptions, not brigade procedures.
+- Exact bot runs: `node tests/bot.js <seed> 6300`, baseline exported from `df16ad7`, combined v0.68.0. The baseline runner only adds the same FINAL metrics and uses an installed Chromium binary; simulation/bot decisions are unchanged. These seeded runs are not statistically controlled comparisons: changed crew decisions and suppression alter random-number consumption.
+
+| Seed | Baseline ha | Combined ha | Baseline held | Combined held | Baseline attacking | Combined attacking | Township impacted before / after |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1234 | 1645 | 1497 | 3% | 14% | 0 | 1 | no / no |
+| 7 | 1172 | 2562 | 4% | 10% | 2 | 3 | no / yes |
+| 21 | 1221 | 1639 | 1% | 9% | 1 | 6 | no / no |
+| 99 | 748 | 2603 | 7% | 10% | 3 | 2 | no / yes |
+
+- **Outcome limitation:** line held improves in these runs, but burnt area increases in three of four and township impact increases in two. This is a tactical-model review build, not a claim of improved fire-outcome balance. The legacy bot still repeatedly directs head attacks; numerical tactical calibration and a commander policy matched to the new model need review. Keep this on the review branch until TK/James is satisfied with behavior.
+- Validation: build, smoke/determinism, upstream head regression, tactical/correctness regressions, three two-hour local exercises, and native right-click checks in both themes. No licensed layers included. Brigade-procedure placeholders remain unchanged.
+
+
 ### 2026-11-05 (later), Claude session for TK: tester feedback triage
 No other pushes had landed on `main` or any other branch when I fetched (remote `ee7b670`, identical to local). The feedback below came from testers in chat, not from commits. Status column is honest: "local" means a change exists in one working tree only and is **not pushed**.
 

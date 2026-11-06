@@ -31,6 +31,10 @@ node tests/bot.js 1234 7200
 ```
 `window.__sim` exposes the engine for tests (`tick`, `reset`, `issue`, `S`, `F`, `units`).
 
+Untasked tankers divide reported-spot work and anchored flank attacks. A Direct or Parallel order near a flank assigns a shared rear anchor and knockdown, blacking-out and relief roles. Amber line is provisionally knocked down; green line is secured by follow-up. Crews work from the burnt side, rotate through refills with a handover where a replacement is available, and fall back from the exposed NE flank near the wind change. Tactical orders given during a refill wait until it completes. Head checks build from sustained eligible crews and can also result from pinching both secured flanks.
+
+Select a crew to see its attack-edge highlight and anchor. Move orders show a brief named destination ping. Right-click the map to clear selection while preserving existing orders. Move, Defend, Indirect, Patrol and Withdraw remain explicit participant orders. Tactical numerical settings are tagged as simulation assumptions in the sim; the brigade-procedure placeholders remain unchanged.
+
 ## Multiplayer
 Planned: Facilitator, DIVCOM, sector commanders and STLs, with chat down the command tree. See `docs/ARCHITECTURE-multiplayer.md`.
 
